@@ -23,7 +23,7 @@ whitelisted_servers = set()
 
 @client.before_invoke
 async def before_invoke(ctx):
-    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name != "help":
+    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name not in ["help", "whitelist"]:
         await ctx.send("server whitelisted. :3")
         raise commands.CheckFailure()
 
