@@ -1,2 +1,2 @@
 [build]
-nixPackages = ["libopus-dev"]
+nixPackages = ["python313Packages.audioop"]
