@@ -1,2 +1,1 @@
 [build]
-nixPackages = ["python313Packages.audioop"]
