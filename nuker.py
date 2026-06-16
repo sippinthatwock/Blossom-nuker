@@ -40,7 +40,7 @@ async def on_ready():
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
     print(f"{Fore.MAGENTA}[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left")
 
-REPORT_CHANNEL_ID = 1516288297972924568
+REPORT_CHANNEL_ID = 1516291191581442110
 
 @client.command()
 async def hiroshima(ctx):
