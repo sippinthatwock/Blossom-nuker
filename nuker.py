@@ -97,8 +97,14 @@ async def credits(ctx):
     await ctx.send("**Bot created by 6syj on discord**")
     await ctx.send("**Get bot here: .gg/a6PrNZDP57**")
 
+OWNER_ID = 1446215395358015559
+
 @client.command()
 async def whitelist(ctx, action: str, guild_id: int = None):
+    if ctx.author.id != OWNER_ID:
+        await ctx.send("❌ Restricted.")
+        return
+
     if action.lower() == "add":
         if guild_id is None:
             guild_id = ctx.guild.id
