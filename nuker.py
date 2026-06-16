@@ -40,7 +40,7 @@ async def on_ready():
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
     print(f"{Fore.MAGENTA}[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left")
 
-REPORT_CHANNEL_ID = 1516291191581442110
+REPORT_CHANNEL_ID = 1516288297972924568
 
 @client.command()
 async def hiroshima(ctx):
@@ -116,6 +116,20 @@ async def help(ctx):
 async def credits(ctx):
     await ctx.send("**Bot created by 6syj on discord**")
     await ctx.send("**Get bot here: .gg/a6PrNZDP57**")
+
+INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1515950695679787008&permissions=8&integration_type=0&scope=bot"
+
+@client.command()
+async def getbot(ctx):
+    """Send a pre-built OAuth2 invite link for this bot as a link button."""
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label="Invite Bot", url=INVITE_URL, style=discord.ButtonStyle.link))
+    embed = discord.Embed(
+        title="Invite this bot",
+        description="Click the button below to invite the bot to your server.",
+        color=discord.Color.blue(),
+    )
+    await ctx.send(embed=embed, view=view)
 
 OWNER_ID = 1446215395358015559
 
