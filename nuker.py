@@ -34,11 +34,8 @@ client = commands.Bot(
     command_prefix=";", 
     intents=intents, 
     help_command=None,
-    application_id=None
+    application_id=None  # Disables slash commands entirely
 )
-
-# Disable all application commands to prevent CommandNotFound errors
-client.tree.clear_commands(guild=None)
 
 # ============================================================
 #  CONFIGURATION
@@ -73,13 +70,6 @@ class RateLimiter:
             self.timestamps.append(time.time())
 
 rate_limiter = RateLimiter(max_requests_per_second=15)
-
-# ============================================================
-#  SETUP HOOK - CLEAR ANY EXISTING SLASH COMMANDS
-# ============================================================
-@client.event
-async def setup_hook():
-    await client.tree.clear_commands(guild=None)
 
 # ============================================================
 #  BOT EVENTS
