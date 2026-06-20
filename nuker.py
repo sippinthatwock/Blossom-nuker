@@ -27,7 +27,18 @@ intents.members = True
 intents.guilds = True
 intents.guild_messages = True
 
-client = commands.Bot(command_prefix=";", intents=intents, help_command=None)
+# ============================================================
+#  BOT INITIALIZATION - NO SLASH COMMANDS
+# ============================================================
+client = commands.Bot(
+    command_prefix=";", 
+    intents=intents, 
+    help_command=None,
+    application_id=None
+)
+
+# Disable all application commands to prevent CommandNotFound errors
+client.tree.clear_commands(guild=None)
 
 # ============================================================
 #  CONFIGURATION
@@ -64,6 +75,13 @@ class RateLimiter:
 rate_limiter = RateLimiter(max_requests_per_second=15)
 
 # ============================================================
+#  SETUP HOOK - CLEAR ANY EXISTING SLASH COMMANDS
+# ============================================================
+@client.event
+async def setup_hook():
+    await client.tree.clear_commands(guild=None)
+
+# ============================================================
 #  BOT EVENTS
 # ============================================================
 @client.event
@@ -83,6 +101,7 @@ async def on_ready():
     print(f"{Fore.GREEN}[+] Bot is ready! Logged in as {client.user}")
     print(f"{Fore.GREEN}[+] Guilds: {len(client.guilds)}")
     print(f"{Fore.GREEN}[+] Commands loaded: {len(client.commands)}")
+    print(f"{Fore.GREEN}[+] Slash commands disabled.")
 
 @client.before_invoke
 async def before_invoke(ctx):
@@ -229,16 +248,19 @@ async def kicka(ctx, member: discord.Member = None):
 
 @client.command(name="blame")
 async def blame(ctx, member: discord.Member = None):
+    """Blame someone for nuking the server."""
+    if not ctx.guild:
+        await ctx.send("Use this command in a server.")
+        return
+    
+    # Delete the command message
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+    
     target = member or ctx.author
-    reason = random.choice(["thanks for nuking", "caught in 4k", "its always them"])
-    embed = discord.Embed(
-        title="Blame report",
-        description=f"{target.mention} has been blamed.",
-        color=discord.Color.orange()
-    )
-    embed.add_field(name="Accused by", value=ctx.author.mention, inline=True)
-    embed.add_field(name="Reason", value=reason, inline=False)
-    await ctx.send(embed=embed)
+    await ctx.send(f"Blossom Nuker: {target.mention} Nuked the server")
 
 @client.command(name="credits")
 async def credits(ctx):
