@@ -72,6 +72,21 @@ class RateLimiter:
 rate_limiter = RateLimiter(max_requests_per_second=15)
 
 # ============================================================
+#  GLOBAL CHECK FOR WHITELISTED SERVERS
+# ============================================================
+async def whitelist_check(ctx):
+    if ctx.guild and ctx.guild.id in whitelisted_servers:
+        if ctx.command.name not in ["getbot", "credits", "whitelist"]:
+            try:
+                await ctx.send("Server is whitelisted. Only ;getbot and ;credits work.", delete_after=5)
+            except:
+                pass
+            return False
+    return True
+
+client.add_check(whitelist_check)
+
+# ============================================================
 #  BOT EVENTS
 # ============================================================
 @client.event
@@ -92,15 +107,6 @@ async def on_ready():
     print(f"{Fore.GREEN}[+] Guilds: {len(client.guilds)}")
     print(f"{Fore.GREEN}[+] Commands loaded: {len(client.commands)}")
     print(f"{Fore.GREEN}[+] Slash commands disabled.")
-
-@client.before_invoke
-async def before_invoke(ctx):
-    if ctx.guild and ctx.guild.id in whitelisted_servers and ctx.command.name in ("nuke", "nothing"):
-        try:
-            await ctx.send("server whitelisted.")
-        except:
-            pass
-        raise commands.CheckFailure()
 
 # ============================================================
 #  WEBHOOK SPAM FUNCTION
